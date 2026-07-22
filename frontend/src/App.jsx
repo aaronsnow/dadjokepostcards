@@ -685,6 +685,10 @@ function PostcardApp() {
 
         <footer className="mt-12 text-center text-[11px]" style={{ color: "#9C9483" }}>
           Fresh dad jokes, delivered by mail. Pun &amp; Post.
+          {" · "}
+          <a href="/terms.html" style={{ color: "#9C9483", textDecoration: "underline" }}>
+            Terms, Privacy &amp; Refunds
+          </a>
         </footer>
       </div>
     </div>
