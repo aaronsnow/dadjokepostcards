@@ -90,7 +90,7 @@ function AirmailBorder({ children }) {
 function PostcardFront({ joke, loading, stamped }) {
   return (
     <AirmailBorder>
-      <div className="min-h-[220px] p-6 flex flex-col justify-between">
+      <div className="h-[240px] p-6 flex flex-col justify-between">
         <div className="flex justify-between items-start">
           <span
             className="text-[10px] tracking-[0.2em] uppercase"
@@ -117,16 +117,22 @@ function PostcardFront({ joke, loading, stamped }) {
   );
 }
 
-function PostcardBack({ joke, recipient, note }) {
+function PostcardBack({ joke, recipient, note, senderName }) {
   return (
     <AirmailBorder>
-      <div className="min-h-[220px] p-5 grid grid-cols-5 gap-4">
-        <div className="col-span-3 border-r pr-4" style={{ borderColor: "#D8CFB8" }}>
+      <div className="h-[240px] p-5 grid grid-cols-5 gap-4">
+        <div className="col-span-3 border-r pr-4 flex flex-col justify-between" style={{ borderColor: "#D8CFB8" }}>
           <p
             className="text-xs italic leading-snug"
             style={{ fontFamily: "'Libre Baskerville', serif", color: "#4A4636" }}
           >
             {note ? note : "No personal note added."}
+          </p>
+          <p
+            className="text-xs"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+          >
+            — {senderName || "A friend"}
           </p>
         </div>
         <div className="col-span-2 flex flex-col justify-between items-end">
@@ -518,7 +524,7 @@ function PostcardApp() {
                 >
                   Back
                 </p>
-                <PostcardBack joke={joke} recipient={recipient} note={note} />
+                <PostcardBack joke={joke} recipient={recipient} note={note} senderName={sender.name} />
               </div>
             </div>
 
