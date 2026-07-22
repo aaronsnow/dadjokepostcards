@@ -21,7 +21,21 @@ const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICE_CENTS = 499;
 
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN || "*" }));
+// FRONTEND_ORIGIN can be a single URL or a comma-separated list (e.g. your
+// custom domain plus the Railway-provided one, while you're transitioning
+// between them). Falls back to allowing any origin if unset.
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length
+      ? allowedOrigins
+      : "*",
+  })
+);
 
 // Stripe webhooks need the RAW body to verify the signature, so this route
 // is registered BEFORE the global express.json() middleware below.
@@ -41,18 +55,20 @@ app.post(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
+    // Acknowledge Stripe immediately — don't make it wait on Lob. This keeps
+    // the response time well under Stripe's ~20s webhook timeout regardless
+    // of how long the Lob call takes, and matters even more on a free-tier
+    // host where a cold start alone can eat into that budget.
+    res.json({ received: true });
+
     if (event.type === "payment_intent.succeeded") {
       const intent = event.data.object;
-      try {
-        await sendPostcard(intent.metadata);
-      } catch (err) {
+      sendPostcard(intent.metadata).catch((err) => {
         // Payment already succeeded — log loudly and let a human intervene.
         // Don't let a Lob failure ever silently swallow a paid order.
         console.error("Postcard send FAILED for paid order:", intent.id, err);
-      }
+      });
     }
-
-    res.json({ received: true });
   }
 );
 
