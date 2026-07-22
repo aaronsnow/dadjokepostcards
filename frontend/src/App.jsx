@@ -656,12 +656,12 @@ function PostcardApp() {
           <div className="max-w-sm mx-auto text-center py-6">
             <CheckCircle2 size={40} color="#3E7C7C" className="mx-auto mb-4" />
             <h2 className="text-xl mb-2" style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}>
-              Payment confirmed
+              On its way
             </h2>
             <p className="text-sm mb-4" style={{ color: "#4A4636" }}>
-              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is paid and would go
-              out to {recipient.name}. Whether it actually gets printed and mailed depends on your backend's
-              webhook successfully reaching Lob — check your backend terminal to confirm that happened.
+              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed. Your
+              postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
+              business days once it's printed and in the mail.
             </p>
             <div className="flex items-center justify-center gap-2 text-xs mb-6" style={{ color: "#9C9483" }}>
               <MapPin size={12} />
@@ -678,7 +678,7 @@ function PostcardApp() {
         )}
 
         <footer className="mt-12 text-center text-[11px]" style={{ color: "#9C9483" }}>
-          Jokes fetched live from icanhazdadjoke.com. Payment runs through Stripe test mode — mailing still needs a live Lob key to actually print.
+          Fresh dad jokes, delivered by mail. Pun &amp; Post.
         </footer>
       </div>
     </div>
