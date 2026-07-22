@@ -79,10 +79,10 @@ function AirmailBorder({ children }) {
       "repeating-linear-gradient(-45deg, #BC4430 0 6px, #F7F1E3 6px 9px, #24344A 9px 15px, #F7F1E3 15px 18px)",
   };
   return (
-    <div className="rounded-sm overflow-hidden" style={{ border: "1px solid #D8CFB8" }}>
-      <div className="h-[6px]" style={stripeStyle} />
-      <div style={{ backgroundColor: "#F7F1E3" }}>{children}</div>
-      <div className="h-[6px]" style={stripeStyle} />
+    <div className="rounded-sm overflow-hidden h-full flex flex-col" style={{ border: "1px solid #D8CFB8" }}>
+      <div className="h-[6px] shrink-0" style={stripeStyle} />
+      <div className="flex-1" style={{ backgroundColor: "#F7F1E3" }}>{children}</div>
+      <div className="h-[6px] shrink-0" style={stripeStyle} />
     </div>
   );
 }
@@ -90,7 +90,7 @@ function AirmailBorder({ children }) {
 function PostcardFront({ joke, loading, stamped }) {
   return (
     <AirmailBorder>
-      <div className="h-[240px] p-6 flex flex-col justify-between">
+      <div className="min-h-[240px] h-full p-6 flex flex-col justify-between">
         <div className="flex justify-between items-start">
           <span
             className="text-[10px] tracking-[0.2em] uppercase"
@@ -120,7 +120,7 @@ function PostcardFront({ joke, loading, stamped }) {
 function PostcardBack({ joke, recipient, note, senderName }) {
   return (
     <AirmailBorder>
-      <div className="h-[240px] p-5 grid grid-cols-5 gap-4">
+      <div className="min-h-[240px] h-full p-5 grid grid-cols-5 gap-4">
         <div className="col-span-3 border-r pr-4 flex flex-col justify-between" style={{ borderColor: "#D8CFB8" }}>
           <p
             className="text-xs italic leading-snug"
@@ -508,23 +508,27 @@ function PostcardApp() {
         {step === "review" && (
           <div>
             <div className="grid sm:grid-cols-2 gap-6">
-              <div>
+              <div className="h-full flex flex-col">
                 <p
                   className="text-[11px] uppercase tracking-wide mb-2 text-center"
                   style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
                 >
                   Front
                 </p>
-                <PostcardFront joke={joke} loading={false} stamped={true} />
+                <div className="flex-1">
+                  <PostcardFront joke={joke} loading={false} stamped={true} />
+                </div>
               </div>
-              <div>
+              <div className="h-full flex flex-col">
                 <p
                   className="text-[11px] uppercase tracking-wide mb-2 text-center"
                   style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
                 >
                   Back
                 </p>
-                <PostcardBack joke={joke} recipient={recipient} note={note} senderName={sender.name} />
+                <div className="flex-1">
+                  <PostcardBack joke={joke} recipient={recipient} note={note} senderName={sender.name} />
+                </div>
               </div>
             </div>
 
