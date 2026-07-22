@@ -687,7 +687,7 @@ function PostcardApp() {
           Fresh dad jokes, delivered by mail. Pun &amp; Post.
           {" · "}
           <a href="/terms.html" style={{ color: "#9C9483", textDecoration: "underline" }}>
-            Terms, Privacy &amp; Refunds
+            Terms and Privacy
           </a>
         </footer>
       </div>
