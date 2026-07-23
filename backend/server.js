@@ -116,7 +116,7 @@ app.post("/api/create-payment-intent", async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount: PRICE_CENTS,
       currency: "usd",
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ["card"],
       // Stash everything the webhook will need to build the postcard.
       // Stripe metadata values must be strings.
       metadata: {
@@ -207,6 +207,9 @@ async function sendPostcard(meta) {
       </div>
       <div style="position:absolute;bottom:0.55in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#24344A;">
         — ${escapeHtml(meta.senderName || "A friend")}
+      </div>
+      <div style="position:absolute;bottom:0.3in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:8pt;letter-spacing:0.04em;color:#9C9483;">
+        dadjokepostcards.com
       </div>
     </body></html>`;
 
