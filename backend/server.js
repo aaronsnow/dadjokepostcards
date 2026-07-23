@@ -234,7 +234,7 @@ async function sendPostcard(meta) {
           — ${escapeHtml(meta.senderName || "A friend")}
         </div>
       </div>
-      <div style="position:absolute;bottom:0.5in;left:0.4in;width:2.2in;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#9C9483;">
+      <div style="position:absolute;bottom:0.5in;left:0.4in;width:2.2in;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
         Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
       </div>
     </body></html>`;

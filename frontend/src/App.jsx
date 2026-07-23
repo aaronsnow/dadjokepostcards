@@ -137,8 +137,8 @@ function PostcardBack({ joke, recipient, note, senderName }) {
         </div>
         <div className="flex justify-between items-end gap-4">
           <p
-            className="text-[9px] leading-snug tracking-wide"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
+            className="text-[9px] font-medium leading-snug tracking-wide"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#BC4430" }}
           >
             Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
           </p>
