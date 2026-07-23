@@ -120,8 +120,8 @@ function PostcardFront({ joke, loading, stamped }) {
 function PostcardBack({ joke, recipient, note, senderName }) {
   return (
     <AirmailBorder>
-      <div className="min-h-[240px] h-full p-5 grid grid-cols-5 gap-4">
-        <div className="col-span-3 border-r pr-4 flex flex-col justify-between" style={{ borderColor: "#D8CFB8" }}>
+      <div className="min-h-[240px] h-full p-5 flex flex-col justify-between">
+        <div>
           <p
             className="text-xs italic leading-snug"
             style={{ fontFamily: "'Libre Baskerville', serif", color: "#4A4636" }}
@@ -129,31 +129,31 @@ function PostcardBack({ joke, recipient, note, senderName }) {
             {note ? note : "No personal note added."}
           </p>
           <p
-            className="text-xs"
+            className="text-xs mt-2"
             style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
           >
             — {senderName || "A friend"}
           </p>
         </div>
-        <div className="col-span-2 flex flex-col justify-between items-end">
-          <div className="flex flex-col items-end gap-2">
-            <p
-              className="text-[9px] text-right leading-snug tracking-wide"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
-            >
-              Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
-            </p>
-            <StampCorner />
-          </div>
-          <div
-            className="text-right text-[11px] leading-snug"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+        <div className="flex justify-between items-end gap-4">
+          <p
+            className="text-[9px] leading-snug tracking-wide"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
           >
-            <div className="font-medium">{recipient.name || "Recipient name"}</div>
-            <div>{recipient.line1 || "Street address"}</div>
-            {recipient.line2 && <div>{recipient.line2}</div>}
-            <div>
-              {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (recipient.zip || "00000")}
+            Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
+          </p>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <StampCorner />
+            <div
+              className="text-right text-[11px] leading-snug"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+            >
+              <div className="font-medium">{recipient.name || "Recipient name"}</div>
+              <div>{recipient.line1 || "Street address"}</div>
+              {recipient.line2 && <div>{recipient.line2}</div>}
+              <div>
+                {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (recipient.zip || "00000")}
+              </div>
             </div>
           </div>
         </div>
