@@ -136,10 +136,10 @@ function PostcardBack({ joke, recipient, note, senderName }) {
               — {senderName || "A friend"}
             </p>
             <p
-              className="text-[10px] tracking-wide mt-1"
+              className="text-[10px] leading-snug tracking-wide mt-1"
               style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
             >
-              dadjokepostcards.com
+              Somebody paid to send you this groaner. Return the favor at dadjokepostcards.com
             </p>
           </div>
         </div>

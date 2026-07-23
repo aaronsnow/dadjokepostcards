@@ -205,11 +205,11 @@ async function sendPostcard(meta) {
       <div style="position:absolute;top:0.7in;left:0.4in;width:2.6in;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;">
         ${escapeHtml(meta.note || "")}
       </div>
-      <div style="position:absolute;bottom:0.55in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#24344A;">
+      <div style="position:absolute;bottom:0.85in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#24344A;">
         — ${escapeHtml(meta.senderName || "A friend")}
       </div>
-      <div style="position:absolute;bottom:0.3in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:8pt;letter-spacing:0.04em;color:#9C9483;">
-        dadjokepostcards.com
+      <div style="position:absolute;bottom:0.3in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#9C9483;">
+        Somebody paid to send you this groaner. Return the favor at dadjokepostcards.com
       </div>
     </body></html>`;
 
