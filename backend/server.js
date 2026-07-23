@@ -37,6 +37,12 @@ app.use(
   })
 );
 
+// Stripe can occasionally redeliver the same webhook event (e.g. after a
+// slow response), and running two `stripe listen` sessions locally at once
+// has the same effect. Track which event IDs we've already acted on so a
+// duplicate delivery never triggers a second postcard for one payment.
+const processedEventIds = new Set();
+
 // Stripe webhooks need the RAW body to verify the signature, so this route
 // is registered BEFORE the global express.json() middleware below.
 app.post(
@@ -62,6 +68,12 @@ app.post(
     res.json({ received: true });
 
     if (event.type === "payment_intent.succeeded") {
+      if (processedEventIds.has(event.id)) {
+        console.log("Duplicate webhook delivery, skipping:", event.id);
+        return;
+      }
+      processedEventIds.add(event.id);
+
       const intent = event.data.object;
       sendPostcard(intent.metadata).catch((err) => {
         // Payment already succeeded — log loudly and let a human intervene.
@@ -205,11 +217,11 @@ async function sendPostcard(meta) {
       <div style="position:absolute;top:0.7in;left:0.4in;width:2.6in;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;">
         ${escapeHtml(meta.note || "")}
       </div>
-      <div style="position:absolute;bottom:0.85in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#24344A;">
-        — ${escapeHtml(meta.senderName || "A friend")}
+      <div style="position:absolute;top:0.55in;right:0.4in;width:2.3in;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#9C9483;">
+        Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
       </div>
-      <div style="position:absolute;bottom:0.3in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#9C9483;">
-        Somebody paid to send you this groaner. Return the favor at dadjokepostcards.com
+      <div style="position:absolute;bottom:0.55in;left:0.4in;width:2.6in;font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#24344A;">
+        — ${escapeHtml(meta.senderName || "A friend")}
       </div>
     </body></html>`;
 

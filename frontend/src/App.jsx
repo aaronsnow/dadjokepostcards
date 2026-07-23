@@ -128,23 +128,23 @@ function PostcardBack({ joke, recipient, note, senderName }) {
           >
             {note ? note : "No personal note added."}
           </p>
-          <div>
-            <p
-              className="text-xs"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
-            >
-              — {senderName || "A friend"}
-            </p>
-            <p
-              className="text-[10px] leading-snug tracking-wide mt-1"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
-            >
-              Somebody paid to send you this groaner. Return the favor at dadjokepostcards.com
-            </p>
-          </div>
+          <p
+            className="text-xs"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+          >
+            — {senderName || "A friend"}
+          </p>
         </div>
         <div className="col-span-2 flex flex-col justify-between items-end">
-          <StampCorner />
+          <div className="flex flex-col items-end gap-2">
+            <p
+              className="text-[9px] text-right leading-snug tracking-wide"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
+            >
+              Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
+            </p>
+            <StampCorner />
+          </div>
           <div
             className="text-right text-[11px] leading-snug"
             style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
