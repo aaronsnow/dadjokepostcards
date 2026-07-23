@@ -228,9 +228,6 @@ async function sendPostcard(meta) {
     <body style="margin:0;padding:0;width:6.25in;height:4.25in;position:relative;background:#F7F1E3;font-family:'Libre Baskerville',serif;">
       ${stripeBarHtml("top")}
       ${stripeBarHtml("bottom")}
-      <div style="position:absolute;top:0.7in;left:0.4in;width:2.6in;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;">
-        ${escapeHtml(meta.note || "")}
-      </div>
       <div style="position:absolute;top:0.55in;left:0.4in;right:0.4in;font-family:'Libre Baskerville',serif;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;">
         ${escapeHtml(meta.note || "")}
         <div style="margin-top:8pt;font-family:'IBM Plex Mono',monospace;font-size:9pt;font-style:normal;color:#24344A;">
