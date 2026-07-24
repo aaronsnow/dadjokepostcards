@@ -346,8 +346,10 @@ function PostcardApp() {
       <div className="max-w-3xl mx-auto px-5 py-10">
         <header className="mb-8 text-center">
           <h1
-            className="text-3xl sm:text-4xl tracking-tight"
+            onClick={resetAll}
+            className="text-3xl sm:text-4xl tracking-tight cursor-pointer"
             style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}
+            title="Start over"
           >
             Pun &amp; Post
           </h1>
