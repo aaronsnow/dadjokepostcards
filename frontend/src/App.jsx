@@ -10,7 +10,7 @@ const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
 `;
 
-const PRICE_CENTS = 499;
+const DEFAULT_PRICE_CENTS = 499; // fallback shown only until /api/price responds
 const NOTE_LIMIT = 140;
 
 // Set VITE_API_BASE in your .env file (or your hosting provider's env vars)
@@ -209,6 +209,21 @@ function PostcardApp() {
   const [paymentError, setPaymentError] = useState("");
   const [paying, setPaying] = useState(false);
   const [orderId, setOrderId] = useState("");
+
+  const [priceCents, setPriceCents] = useState(DEFAULT_PRICE_CENTS);
+
+  useEffect(() => {
+    if (!API_BASE) return; // demo/preview context — just use the default
+    fetch(`${API_BASE}/api/price`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        if (typeof data.priceCents === "number") setPriceCents(data.priceCents);
+      })
+      .catch(() => {
+        // Keep DEFAULT_PRICE_CENTS — this is only a display value anyway;
+        // the actual charge is always decided server-side regardless.
+      });
+  }, []);
 
   const fetchJoke = useCallback(async () => {
     setJokeLoading(true);
@@ -552,7 +567,7 @@ function PostcardApp() {
                 className="text-sm font-medium"
                 style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
               >
-                {formatPrice(PRICE_CENTS)}
+                {formatPrice(priceCents)}
               </span>
             </div>
 
@@ -641,7 +656,7 @@ function PostcardApp() {
                   className="text-base font-medium"
                   style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
                 >
-                  {formatPrice(PRICE_CENTS)}
+                  {formatPrice(priceCents)}
                 </span>
               </div>
 

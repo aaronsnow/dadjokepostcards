@@ -19,7 +19,7 @@ import "dotenv/config";
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const PRICE_CENTS = 499;
+const PRICE_CENTS = parseInt(process.env.PRICE_CENTS, 10) || 499;
 
 // FRONTEND_ORIGIN can be a single URL or a comma-separated list (e.g. your
 // custom domain plus the Railway-provided one, while you're transitioning
@@ -119,6 +119,14 @@ app.get("/api/joke", async (req, res) => {
     console.error("Joke fetch failed:", err.message);
     res.status(502).json({ error: "Could not fetch a joke right now" });
   }
+});
+
+// The frontend fetches this instead of hardcoding its own copy of the
+// price, so the on-screen display can never disagree with what's actually
+// charged — that's still decided entirely by PRICE_CENTS above, this just
+// lets the display reflect it without needing its own hardcoded value.
+app.get("/api/price", (req, res) => {
+  res.json({ priceCents: PRICE_CENTS });
 });
 
 // 1. Front end calls this once the user has picked a joke and filled in
