@@ -4,6 +4,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
+const IS_STRIPE_TEST_MODE = (import.meta.env.VITE_ENVIRONMENT_NAME || "").trim().toLowerCase() !== "production";
 
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -593,7 +594,9 @@ function PostcardApp() {
               className="mb-4 px-3 py-2 rounded-sm text-[11px] text-center"
               style={{ backgroundColor: "#F0E9D8", color: "#6B6558", fontFamily: "'IBM Plex Mono', monospace" }}
             >
-              Stripe test mode — use 4242 4242 4242 4242, any future date, any CVC
+              {IS_STRIPE_TEST_MODE
+                ? "Stripe test mode — use 4242 4242 4242 4242, any future date, any CVC"
+                : "Payment is processed securely by Stripe. Your card details never touch our servers."}
             </div>
             <form onSubmit={submitPayment} className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
