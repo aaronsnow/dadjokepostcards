@@ -30,7 +30,8 @@ const FALLBACK_JOKES = [
 ];
 
 function formatPrice(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  const dollars = cents / 100;
+  return dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
 function Postmark({ stamped }) {
