@@ -98,7 +98,7 @@ function PostcardFront({ joke, loading, stamped }) {
             className="text-[10px] tracking-[0.2em] uppercase"
             style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
           >
-            Dept. of Dad Humor
+            Dept. of Questionable Humor
           </span>
           <Postmark stamped={stamped} />
         </div>
@@ -717,7 +717,7 @@ function PostcardApp() {
         )}
 
         <footer className="mt-12 text-center text-[11px]" style={{ color: "#9C9483" }}>
-          Fresh dad jokes, delivered by mail. Pun &amp; Post.
+          Fresh dadjokes, delivered by mail. Pun &amp; Post.
           {" · "}
           <a href="/terms.html" style={{ color: "#9C9483", textDecoration: "underline" }}>
             Terms and Privacy
