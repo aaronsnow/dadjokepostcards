@@ -212,7 +212,7 @@ async function sendPostcard(meta) {
       ${stripeBarHtml("top")}
       ${stripeBarHtml("bottom")}
       <div style="position:absolute;top:0.55in;left:0.4in;font-family:'IBM Plex Mono',monospace;font-size:9pt;letter-spacing:2px;text-transform:uppercase;color:#6B6558;">
-        Dept. of Dad Humor
+        Dept. of Questionable Humor
       </div>
       <div style="position:absolute;top:0.45in;right:0.4in;width:1in;height:1in;">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1in" height="1in">
