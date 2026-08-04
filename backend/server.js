@@ -20,6 +20,10 @@ import "dotenv/config";
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICE_CENTS = parseInt(process.env.PRICE_CENTS, 10) || 499;
+// Mirrors NOTE_LIMIT in the frontend's App.jsx. Enforced here too since the
+// frontend's maxLength is trivially bypassable by anyone calling this API
+// directly.
+const NOTE_LIMIT = 280;
 
 // FRONTEND_ORIGIN can be a single URL or a comma-separated list (e.g. your
 // custom domain plus the Railway-provided one, while you're transitioning
@@ -132,10 +136,14 @@ app.get("/api/price", (req, res) => {
 // 1. Front end calls this once the user has picked a joke and filled in
 //    the recipient address, BEFORE showing the card payment form.
 app.post("/api/create-payment-intent", async (req, res) => {
-  const { joke, note, recipient, sender } = req.body;
+  const { joke, note, recipient } = req.body;
 
   if (!joke || !recipient?.name || !recipient?.line1 || !recipient?.zip) {
     return res.status(400).json({ error: "Missing joke or recipient details" });
+  }
+
+  if (note && note.length > NOTE_LIMIT) {
+    return res.status(400).json({ error: `Note is too long (${NOTE_LIMIT} character max).` });
   }
 
   try {
@@ -156,7 +164,6 @@ app.post("/api/create-payment-intent", async (req, res) => {
         environment: process.env.ENVIRONMENT_NAME || "unset",
         joke,
         note: note || "",
-        senderName: sender?.name || "",
         recipientName: recipient.name,
         recipientLine1: recipient.line1,
         recipientLine2: recipient.line2 || "",
@@ -200,7 +207,7 @@ function stripeBarHtml(position) {
 }
 
 const FONT_LINK =
-  '<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">';
+  '<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">';
 
 // 2. Called by the Stripe webhook above once payment has actually cleared.
 async function sendPostcard(meta) {
@@ -211,10 +218,10 @@ async function sendPostcard(meta) {
     <body style="margin:0;padding:0;width:6.25in;height:4.25in;position:relative;background:#E8DCC3;font-family:'Libre Baskerville',serif;">
       ${stripeBarHtml("top")}
       ${stripeBarHtml("bottom")}
-      <div style="position:absolute;top:0.55in;left:0.4in;font-family:'IBM Plex Mono',monospace;font-size:9pt;letter-spacing:2px;text-transform:uppercase;color:#6B6558;">
+      <div style="position:absolute;top:0.75in;left:0.4in;font-family:'IBM Plex Mono',monospace;font-size:9pt;letter-spacing:2px;text-transform:uppercase;color:#6B6558;">
         Dept. of Questionable Humor
       </div>
-      <div style="position:absolute;top:0.45in;right:0.4in;width:1in;height:1in;">
+      <div style="position:absolute;top:0.65in;right:0.4in;width:1in;height:1in;">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1in" height="1in">
           <circle cx="50" cy="50" r="47" fill="none" stroke="#BC4430" stroke-width="2"/>
           <g transform="rotate(-12 50 50)">
@@ -224,26 +231,28 @@ async function sendPostcard(meta) {
           </g>
         </svg>
       </div>
-      <div style="position:absolute;top:1.8in;left:0.5in;right:0.5in;text-align:center;font-size:16pt;line-height:1.4;color:#24344A;">
+      <div style="position:absolute;top:1.95in;left:0.5in;right:0.5in;text-align:center;font-size:16pt;line-height:1.4;color:#24344A;">
         ${escapeHtml(meta.joke)}
       </div>
     </body></html>`;
 
-  // Lob auto-prints the address/postage in the bottom-right ~3.28in x 2.38in
-  // of the back — our content stays in the left column so it never collides.
+  // Lob's 4x6 back template: 5.75in safe-zone width, with a 3.2835in x 2.38in
+  // address/postage block it auto-prints flush to the bottom-right, plus a
+  // 0.15in buffer before the safe zone's right edge. That leaves exactly
+  // 5.75 - 3.2835 - 0.15 = 2.3165in of usable width to the left of it —
+  // our note column is sized to that, not to the left-column guess this
+  // used before (which was wide enough to visually run into the address
+  // block for anything longer than a couple of words).
   const backHtml = `
     <html><head><meta charset="UTF-8">${FONT_LINK}</head>
     <body style="margin:0;padding:0;width:6.25in;height:4.25in;position:relative;background:#F7F1E3;font-family:'Libre Baskerville',serif;">
       ${stripeBarHtml("top")}
       ${stripeBarHtml("bottom")}
-      <div style="position:absolute;top:0.55in;left:0.4in;right:0.4in;font-family:'Libre Baskerville',serif;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;">
+      <div style="position:absolute;top:0.55in;left:0.25in;width:2.3165in;font-family:'Libre Baskerville',serif;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;overflow-wrap:break-word;">
         ${escapeHtml(meta.note || "")}
-        <div style="margin-top:8pt;font-family:'IBM Plex Mono',monospace;font-size:9pt;font-style:normal;color:#24344A;">
-          — ${escapeHtml(meta.senderName || "A friend")}
-        </div>
       </div>
-      <div style="position:absolute;bottom:0.5in;left:0.4in;width:2.2in;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
-        Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
+      <div style="position:absolute;top:0.55in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
+        Somebody paid to send you this groaner. You can return the favor at <span style="font-weight:700">dadjokepostcards.com</span>
       </div>
     </body></html>`;
 

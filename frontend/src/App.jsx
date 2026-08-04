@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { RefreshCw, Send, ArrowLeft, MapPin, CreditCard, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -7,11 +7,11 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 
 const IS_STRIPE_TEST_MODE = (import.meta.env.VITE_ENVIRONMENT_NAME || "").trim().toLowerCase() !== "production";
 
 const FONT_IMPORT = `
-@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
 `;
 
 const DEFAULT_PRICE_CENTS = 499; // fallback shown only until /api/price responds
-const NOTE_LIMIT = 140;
+const NOTE_LIMIT = 280;
 
 // Set VITE_API_BASE in your .env file (or your hosting provider's env vars)
 // to your deployed backend's URL, e.g. "https://your-app.onrender.com".
@@ -29,14 +29,43 @@ const FALLBACK_JOKES = [
   "Why did the scarecrow win an award? He was outstanding in his field.",
 ];
 
+// Auto-shrinks text to fit its container rather than letting it clip under
+// AirmailBorder's overflow-hidden. Re-attempts at full scale whenever the
+// watched content changes or the box is resized, then steps the scale down
+// until the content's natural height fits, or we hit minScale.
+function useFitScale(ref, deps, minScale = 0.75, step = 0.05) {
+  const [scale, setScale] = useState(1);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setScale(1), deps);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.scrollHeight > el.clientHeight + 1 && scale > minScale) {
+      setScale((s) => Math.max(minScale, +(s - step).toFixed(2)));
+    }
+  });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setScale(1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  return scale;
+}
+
 function formatPrice(cents) {
   const dollars = cents / 100;
   return dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
-function Postmark({ stamped }) {
+function Postmark({ stamped, scale = 1 }) {
   return (
-    <div className="relative w-20 h-20 shrink-0">
+    <div className="relative shrink-0" style={{ width: `${80 * scale}px`, height: `${80 * scale}px` }}>
       <div
         className="absolute inset-0 rounded-full border-2 flex items-center justify-center text-center leading-tight"
         style={{
@@ -47,8 +76,8 @@ function Postmark({ stamped }) {
         }}
       >
         <span
-          className="text-[9px] tracking-widest uppercase"
-          style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#BC4430" }}
+          className="tracking-widest uppercase"
+          style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#BC4430", fontSize: `${9 * scale}px` }}
         >
           Groan
           <br />
@@ -81,34 +110,41 @@ function AirmailBorder({ children }) {
       "repeating-linear-gradient(-45deg, #BC4430 0 6px, #F7F1E3 6px 9px, #24344A 9px 15px, #F7F1E3 15px 18px)",
   };
   return (
-    <div className="rounded-sm overflow-hidden h-full flex flex-col" style={{ border: "1px solid #D8CFB8" }}>
+    <div className="rounded-sm overflow-hidden aspect-[3/2] flex flex-col" style={{ border: "1px solid #D8CFB8" }}>
       <div className="h-[6px] shrink-0" style={stripeStyle} />
-      <div className="flex-1" style={{ backgroundColor: "#F7F1E3" }}>{children}</div>
+      <div className="flex-1 min-h-0" style={{ backgroundColor: "#F7F1E3" }}>{children}</div>
       <div className="h-[6px] shrink-0" style={stripeStyle} />
     </div>
   );
 }
 
 function PostcardFront({ joke, loading, stamped }) {
+  const contentRef = useRef(null);
+  const fitScale = useFitScale(contentRef, [joke, loading], 0.5);
+
   return (
     <AirmailBorder>
-      <div className="min-h-[240px] h-full p-6 flex flex-col justify-between">
+      <div ref={contentRef} className="h-full min-h-0 p-6 flex flex-col justify-between">
         <div className="flex justify-between items-start">
           <span
-            className="text-[10px] tracking-[0.2em] uppercase"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+            className="tracking-[0.2em] uppercase"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558", fontSize: `${10 * fitScale}px` }}
           >
             Dept. of Questionable Humor
           </span>
-          <Postmark stamped={stamped} />
+          <Postmark stamped={stamped} scale={fitScale} />
         </div>
         <div className="flex-1 flex items-center justify-center px-2 py-6">
           {loading ? (
             <Loader2 className="animate-spin" size={28} color="#9C9483" />
           ) : (
             <p
-              className="text-center text-lg leading-snug"
-              style={{ fontFamily: "'Libre Baskerville', serif", color: "#24344A" }}
+              className="text-center leading-snug"
+              style={{
+                fontFamily: "'Libre Baskerville', serif",
+                color: "#24344A",
+                fontSize: `${18 * fitScale}px`,
+              }}
             >
               {joke}
             </p>
@@ -119,36 +155,56 @@ function PostcardFront({ joke, loading, stamped }) {
   );
 }
 
-function PostcardBack({ joke, recipient, note, senderName }) {
+function PostcardBack({ joke, recipient, note }) {
+  const contentRef = useRef(null);
+  const fitScale = useFitScale(contentRef, [
+    note,
+    recipient.name,
+    recipient.line1,
+    recipient.line2,
+    recipient.city,
+    recipient.state,
+    recipient.zip,
+  ]);
+
   return (
     <AirmailBorder>
-      <div className="min-h-[240px] h-full p-5 flex flex-col justify-between">
-        <div>
+      <div ref={contentRef} className="h-full min-h-0 p-5 flex gap-3">
+        <div style={{ flexBasis: "40%" }} className="min-w-0">
           <p
-            className="text-xs italic leading-snug"
-            style={{ fontFamily: "'Libre Baskerville', serif", color: "#4A4636" }}
+            className="italic leading-snug"
+            style={{
+              fontFamily: "'Libre Baskerville', serif",
+              color: "#4A4636",
+              fontSize: `${12 * fitScale}px`,
+              overflowWrap: "break-word",
+            }}
           >
             {note ? note : "No personal note added."}
           </p>
-          <p
-            className="text-xs mt-2"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
-          >
-            — {senderName || "A friend"}
-          </p>
         </div>
-        <div className="flex justify-between items-end gap-4">
+        <div style={{ flexBasis: "58%" }} className="min-w-0 flex flex-col justify-between items-end">
           <p
-            className="text-[9px] font-medium leading-snug tracking-wide"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#BC4430" }}
+            className="font-medium leading-snug tracking-wide text-right"
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              color: "#BC4430",
+              fontSize: `${9 * fitScale}px`,
+            }}
           >
-            Somebody paid to send you this groaner. You can return the favor at dadjokepostcards.com
+            Somebody paid to send you this groaner. You can return the favor at <span style={{ fontWeight: 700 }}>dadjokepostcards.com</span>
           </p>
           <div className="flex flex-col items-end gap-2 shrink-0">
-            <StampCorner />
+            <div style={{ transform: `scale(${fitScale})`, transformOrigin: "top right" }}>
+              <StampCorner />
+            </div>
             <div
-              className="text-right text-[11px] leading-snug"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+              className="text-right leading-snug"
+              style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: "#24344A",
+                fontSize: `${11 * fitScale}px`,
+              }}
             >
               <div className="font-medium">{recipient.name || "Recipient name"}</div>
               <div>{recipient.line1 || "Street address"}</div>
@@ -200,9 +256,14 @@ function PostcardApp() {
   const [jokeLoading, setJokeLoading] = useState(false);
   const [jokeError, setJokeError] = useState(false);
   const [stamped, setStamped] = useState(false);
+  // Linear history of jokes shown this session, plus a pointer into it.
+  // "Previous joke" moves the pointer back (no fetch). "Next joke" moves
+  // forward through anything already fetched; only once there's nothing
+  // ahead does it fetch a new one and append it.
+  const [jokeNav, setJokeNav] = useState({ history: [], index: -1 });
 
   const [recipient, setRecipient] = useState({ name: "", line1: "", line2: "", city: "", state: "", zip: "" });
-  const [sender, setSender] = useState({ name: "" });
+  const [billingName, setBillingName] = useState("");
   const [note, setNote] = useState("");
 
   const [clientSecret, setClientSecret] = useState("");
@@ -233,30 +294,63 @@ function PostcardApp() {
     // Try your own backend first (this is the real production path — see
     // /api/joke in server.js). Only fall back to the public demo proxy if
     // no backend is configured, which is the case in this chat preview.
+    const recordJoke = (newJoke) => {
+      setJoke(newJoke);
+      setJokeNav(({ history, index }) => {
+        const truncated = history.slice(0, index + 1);
+        return { history: [...truncated, newJoke], index: truncated.length };
+      });
+    };
     try {
       if (API_BASE) {
         const res = await fetch(`${API_BASE}/api/joke`);
         if (!res.ok) throw new Error("backend error");
         const data = await res.json();
-        setJoke(data.joke);
+        recordJoke(data.joke);
         return;
       }
       const res = await fetch(DEMO_PROXY, { headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error("proxy error");
       const data = await res.json();
       if (!data.joke) throw new Error("no joke in response");
-      setJoke(data.joke);
+      recordJoke(data.joke);
     } catch (e) {
       setJokeError(true);
-      setJoke(FALLBACK_JOKES[Math.floor(Math.random() * FALLBACK_JOKES.length)]);
+      recordJoke(FALLBACK_JOKES[Math.floor(Math.random() * FALLBACK_JOKES.length)]);
     } finally {
       setJokeLoading(false);
     }
   }, []);
 
+  // StrictMode intentionally double-invokes effects on mount in development
+  // to surface exactly this kind of bug: without this guard, the initial
+  // fetch would run twice and record two jokes in history instead of one,
+  // leaving "Previous joke" active before anyone had clicked anything.
+  const didInitRef = useRef(false);
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
     fetchJoke();
   }, [fetchJoke]);
+
+  const previousJoke = () => {
+    if (jokeNav.index <= 0) return;
+    setStamped(false);
+    setJoke(jokeNav.history[jokeNav.index - 1]);
+    setJokeNav((nav) => ({ ...nav, index: nav.index - 1 }));
+  };
+
+  const nextJoke = () => {
+    if (jokeNav.index < jokeNav.history.length - 1) {
+      // Already have a joke ahead of us (we stepped back at some point) —
+      // move forward to it instead of fetching and overwriting it.
+      setStamped(false);
+      setJoke(jokeNav.history[jokeNav.index + 1]);
+      setJokeNav((nav) => ({ ...nav, index: nav.index + 1 }));
+      return;
+    }
+    fetchJoke();
+  };
 
   const acceptJoke = () => {
     setStamped(true);
@@ -281,7 +375,7 @@ function PostcardApp() {
       const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ joke, note, recipient, sender }),
+        body: JSON.stringify({ joke, note, recipient }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start payment");
@@ -303,7 +397,7 @@ function PostcardApp() {
     const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
       payment_method: {
         card: elements.getElement(CardElement),
-        billing_details: { name: sender.name || recipient.name },
+        billing_details: { name: billingName },
       },
     });
 
@@ -320,8 +414,9 @@ function PostcardApp() {
 
   const resetAll = () => {
     setStep("browse");
+    setJokeNav({ history: [], index: -1 });
     setRecipient({ name: "", line1: "", line2: "", city: "", state: "", zip: "" });
-    setSender({ name: "" });
+    setBillingName("");
     setNote("");
     setClientSecret("");
     setPaymentError("");
@@ -384,9 +479,23 @@ function PostcardApp() {
                 Couldn't reach the joke service — showing a backup joke instead.
               </p>
             )}
-            <div className="flex justify-center gap-3 mt-6">
+            <div className="flex flex-wrap justify-center gap-3 mt-6">
               <button
-                onClick={fetchJoke}
+                onClick={previousJoke}
+                disabled={jokeLoading || jokeNav.index <= 0}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm uppercase tracking-wide"
+                style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  border: "1.5px solid #24344A",
+                  color: "#24344A",
+                  opacity: jokeLoading || jokeNav.index <= 0 ? 0.5 : 1,
+                }}
+              >
+                <ArrowLeft size={14} />
+                Previous joke
+              </button>
+              <button
+                onClick={nextJoke}
                 disabled={jokeLoading}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm uppercase tracking-wide"
                 style={{
@@ -475,33 +584,19 @@ function PostcardApp() {
               </div>
 
               <h2
-                className="text-sm uppercase tracking-wide mt-5 mb-3"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
-              >
-                From
-              </h2>
-              <input
-                className="w-full px-3 py-2 text-sm rounded-sm"
-                style={inputStyle}
-                placeholder="Your name"
-                value={sender.name}
-                onChange={(e) => setSender({ name: e.target.value })}
-              />
-
-              <h2
                 className="text-sm uppercase tracking-wide mt-5 mb-2"
                 style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
               >
-                Add a note (optional)
+                Add a note (optional — don't forget to sign it!)
               </h2>
               <textarea
                 className="w-full px-3 py-2 text-sm rounded-sm resize-none"
                 style={inputStyle}
-                rows={3}
+                rows={4}
                 maxLength={NOTE_LIMIT}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="There's room for a short line on the back of the card."
+                placeholder="Wish you were here! Miss you already. Love, Dad"
               />
               <p className="text-[11px] text-right mt-1" style={{ color: "#9C9483" }}>
                 {note.length}/{NOTE_LIMIT}
@@ -554,7 +649,7 @@ function PostcardApp() {
                   Back
                 </p>
                 <div className="flex-1">
-                  <PostcardBack joke={joke} recipient={recipient} note={note} senderName={sender.name} />
+                  <PostcardBack joke={joke} recipient={recipient} note={note} />
                 </div>
               </div>
             </div>
@@ -626,6 +721,15 @@ function PostcardApp() {
                   Payment details
                 </span>
               </div>
+
+              <input
+                className="w-full px-3 py-2 text-sm rounded-sm"
+                style={inputStyle}
+                placeholder="Name on card"
+                required
+                value={billingName}
+                onChange={(e) => setBillingName(e.target.value)}
+              />
 
               <div className="px-3 py-3 rounded-sm" style={inputStyle}>
                 <CardElement
