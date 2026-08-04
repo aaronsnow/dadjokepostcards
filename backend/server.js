@@ -232,7 +232,7 @@ async function sendPostcard(meta) {
         </svg>
       </div>
       <div style="position:absolute;top:1.95in;left:0.5in;right:0.5in;text-align:center;font-size:16pt;line-height:1.4;color:#24344A;">
-        ${escapeHtml(meta.joke)}
+        ${jokeHtml(meta.joke)}
       </div>
     </body></html>`;
 
@@ -327,6 +327,24 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// Run on the raw joke text BEFORE escaping — escapeHtml turns a literal "
+// into &quot;, which would break the "quote right after punctuation" check
+// below if we ran this afterward.
+function insertPunchlineBreaks(text) {
+  if (!text) return text;
+  return text.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+}
+
+// Renders each line as its own block with margin-top, mirroring the
+// frontend's JokeText component, so the punchline reads as a paragraph
+// break (a beat of a pause) rather than just a tight line wrap.
+function jokeHtml(joke) {
+  return escapeHtml(insertPunchlineBreaks(joke))
+    .split("\n")
+    .map((line, i) => `<span style="display:block;margin-top:${i > 0 ? "1em" : "0"};">${line}</span>`)
+    .join("");
 }
 
 const port = process.env.PORT || 3001;

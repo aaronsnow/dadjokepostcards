@@ -5,6 +5,29 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
 const IS_STRIPE_TEST_MODE = (import.meta.env.VITE_ENVIRONMENT_NAME || "").trim().toLowerCase() !== "production";
+// Staging exists specifically for testing changes before they go live —
+// counting that traffic would badly skew real visitor/funnel numbers, so
+// analytics only actually fires in production, even though the GoatCounter
+// script itself loads everywhere (see index.html's no_onload).
+const ANALYTICS_ENABLED = (import.meta.env.VITE_ENVIRONMENT_NAME || "").trim().toLowerCase() === "production";
+
+// Fires a GoatCounter event once per step per session (first arrival only —
+// re-entering a step via "← Edit" etc. shouldn't inflate the funnel
+// numbers). The first step doubles as the overall visitor count, so no
+// separate pageview call is needed.
+const trackedSteps = new Set();
+function trackStep(step, attempt = 0) {
+  if (!ANALYTICS_ENABLED || trackedSteps.has(step)) return;
+  // count.js loads async, so it may not be ready yet on the very first
+  // step (page load). Retry briefly rather than silently dropping the
+  // event — don't mark as tracked until it's actually been sent.
+  if (!window.goatcounter || !window.goatcounter.count) {
+    if (attempt < 50) setTimeout(() => trackStep(step, attempt + 1), 100);
+    return;
+  }
+  trackedSteps.add(step);
+  window.goatcounter.count({ path: `step-${step}`, event: true });
+}
 
 const FONT_IMPORT = `
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
@@ -56,6 +79,25 @@ function useFitScale(ref, deps, minScale = 0.75, step = 0.05) {
   }, [ref]);
 
   return scale;
+}
+
+// Mirrors insertPunchlineBreaks in the backend's server.js — keep both in
+// sync if this pattern changes. Breaks after each sentence-ending
+// punctuation mark, optionally followed by a closing quote, so the
+// punchline lands on its own line even though the joke API doesn't
+// provide one itself.
+function insertPunchlineBreaks(text) {
+  if (!text) return text;
+  return text.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+}
+
+function JokeText({ text }) {
+  const lines = insertPunchlineBreaks(text).split("\n");
+  return lines.map((line, i) => (
+    <span key={i} style={{ display: "block", marginTop: i > 0 ? "1em" : 0 }}>
+      {line}
+    </span>
+  ));
 }
 
 function formatPrice(cents) {
@@ -146,7 +188,7 @@ function PostcardFront({ joke, loading, stamped }) {
                 fontSize: `${18 * fitScale}px`,
               }}
             >
-              {joke}
+              <JokeText text={joke} />
             </p>
           )}
         </div>
@@ -252,6 +294,11 @@ function PostcardApp() {
   const elements = useElements();
 
   const [step, setStep] = useState("browse");
+
+  useEffect(() => {
+    trackStep(step);
+  }, [step]);
+
   const [joke, setJoke] = useState("");
   const [jokeLoading, setJokeLoading] = useState(false);
   const [jokeError, setJokeError] = useState(false);
