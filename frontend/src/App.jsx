@@ -100,6 +100,14 @@ function JokeText({ text }) {
   ));
 }
 
+// Display-only mirror of the backend's ZIP normalization — inserts the
+// hyphen for a bare 9-digit ZIP so the preview matches what actually gets
+// stored and printed, without waiting on a round trip to the server.
+function formatZip(zip) {
+  const trimmed = (zip || "").trim();
+  return /^\d{9}$/.test(trimmed) ? `${trimmed.slice(0, 5)}-${trimmed.slice(5)}` : trimmed;
+}
+
 function formatPrice(cents) {
   const dollars = cents / 100;
   return dollars % 1 === 0 ? `$${dollars}` : `$${dollars.toFixed(2)}`;
@@ -252,7 +260,7 @@ function PostcardBack({ joke, recipient, note }) {
               <div>{recipient.line1 || "Street address"}</div>
               {recipient.line2 && <div>{recipient.line2}</div>}
               <div>
-                {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (recipient.zip || "00000")}
+                {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (formatZip(recipient.zip) || "00000")}
               </div>
             </div>
           </div>
@@ -410,7 +418,7 @@ function PostcardApp() {
   // Called when the user clicks "Proceed to payment" on the review step.
   // Asks the backend to verify the address and start a Stripe PaymentIntent
   // before we ever show a card field.
-  const goToPayment = async () => {
+  const goToReview = async () => {
     setCreatingIntent(true);
     setPaymentError("");
     if (!API_BASE) {
@@ -427,7 +435,7 @@ function PostcardApp() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start payment");
       setClientSecret(data.clientSecret);
-      setStep("payment");
+      setStep("review");
     } catch (err) {
       setPaymentError(err.message);
     } finally {
@@ -496,7 +504,7 @@ function PostcardApp() {
             Pun &amp; Post
           </h1>
           <p className="mt-2 text-sm italic" style={{ color: "#6B6558" }}>
-            One groan-worthy joke, mailed to someone who deserves it.
+            One groan-worthy joke, mailed to someone who deserves it: {formatPrice(priceCents)}
           </p>
         </header>
 
@@ -649,6 +657,25 @@ function PostcardApp() {
                 {note.length}/{NOTE_LIMIT}
               </p>
 
+              {paymentError && (
+                <p className="text-xs mt-3" style={{ color: "#BC4430" }}>
+                  {paymentError}
+                  {paymentError.includes("isn't allowed") && (
+                    <>
+                      {" "}
+                      <a
+                        href="/terms.html"
+                        target="_blank"
+                        rel="noopener"
+                        style={{ color: "#BC4430", textDecoration: "underline" }}
+                      >
+                        See our Terms.
+                      </a>
+                    </>
+                  )}
+                </p>
+              )}
+
               <div className="flex justify-between mt-6">
                 <button
                   onClick={() => setStep("browse")}
@@ -658,16 +685,18 @@ function PostcardApp() {
                   <ArrowLeft size={14} /> Back
                 </button>
                 <button
-                  onClick={() => setStep("review")}
-                  disabled={!recipientComplete}
-                  className="px-5 py-2.5 rounded-sm text-sm uppercase tracking-wide"
+                  onClick={goToReview}
+                  disabled={!recipientComplete || creatingIntent}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-sm uppercase tracking-wide"
                   style={{
                     fontFamily: "'IBM Plex Mono', monospace",
                     backgroundColor: recipientComplete ? "#BC4430" : "#D8CFB8",
                     color: "#F7F1E3",
+                    opacity: creatingIntent ? 0.7 : 1,
                   }}
                 >
-                  Review postcard
+                  {creatingIntent ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {creatingIntent ? "Verifying address…" : "Review postcard"}
                 </button>
               </div>
             </div>
@@ -716,12 +745,6 @@ function PostcardApp() {
               </span>
             </div>
 
-            {paymentError && (
-              <p className="text-xs text-center mt-3 max-w-xs mx-auto" style={{ color: "#BC4430" }}>
-                {paymentError}
-              </p>
-            )}
-
             <div className="flex justify-between mt-6 max-w-xs mx-auto">
               <button
                 onClick={() => setStep("compose")}
@@ -731,18 +754,17 @@ function PostcardApp() {
                 <ArrowLeft size={14} /> Edit
               </button>
               <button
-                onClick={goToPayment}
-                disabled={creatingIntent}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-sm uppercase tracking-wide"
+                onClick={() => setStep("payment")}
+                disabled={!clientSecret}
+                className="px-5 py-2.5 rounded-sm text-sm uppercase tracking-wide"
                 style={{
                   fontFamily: "'IBM Plex Mono', monospace",
                   backgroundColor: "#BC4430",
                   color: "#F7F1E3",
-                  opacity: creatingIntent ? 0.7 : 1,
+                  opacity: clientSecret ? 1 : 0.7,
                 }}
               >
-                {creatingIntent ? <Loader2 size={14} className="animate-spin" /> : null}
-                {creatingIntent ? "Verifying address…" : "Proceed to payment"}
+                Proceed to payment
               </button>
             </div>
           </div>
