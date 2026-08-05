@@ -10,6 +10,7 @@
 //   RETURN_ADDRESS_* (your business return address, required by Lob/USPS)
 //   FRONTEND_ORIGIN (for CORS)
 //   PORT (optional, defaults to 3001)
+//   OPENAI_API_KEY (optional — note moderation is skipped, not blocked, if unset)
 
 import express from "express";
 import cors from "cors";
@@ -20,6 +21,18 @@ import "dotenv/config";
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICE_CENTS = parseInt(process.env.PRICE_CENTS, 10) || 499;
+// The 50 states, DC, USPS-recognized territories, and military
+// designations (AA/AE/AP for APO/FPO addresses). Used as a free, local
+// sanity check on the state field — catches "XX"-style typos at zero cost,
+// with no way for anyone to run up a bill against it since it's just a
+// set lookup, not an API call.
+const US_STATE_CODES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA",
+  "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+  "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+  "DC", "AS", "GU", "MP", "PR", "VI",
+  "AA", "AE", "AP",
+]);
 // Mirrors NOTE_LIMIT in the frontend's App.jsx. Enforced here too since the
 // frontend's maxLength is trivially bypassable by anyone calling this API
 // directly.
@@ -133,6 +146,35 @@ app.get("/api/price", (req, res) => {
   res.json({ priceCents: PRICE_CENTS });
 });
 
+// Checks the note against OpenAI's free moderation endpoint before letting
+// an order through. Deliberately fails OPEN, not closed: if OPENAI_API_KEY
+// isn't set, the request errors, or OpenAI is having a bad day, we let the
+// order proceed rather than block a real customer over an infrastructure
+// hiccup on our end. This is a first-pass filter, not a guarantee — see the
+// Content policy section on the Terms page for what it actually covers.
+async function isFlagged(note) {
+  if (!note || !note.trim() || !process.env.OPENAI_API_KEY) return false;
+  try {
+    const res = await fetch("https://api.openai.com/v1/moderations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: "omni-moderation-latest", input: note }),
+    });
+    if (!res.ok) {
+      console.error("Moderation API returned", res.status, "— allowing note through");
+      return false;
+    }
+    const data = await res.json();
+    return data.results?.[0]?.flagged === true;
+  } catch (err) {
+    console.error("Moderation check failed, allowing note through:", err.message);
+    return false;
+  }
+}
+
 // 1. Front end calls this once the user has picked a joke and filled in
 //    the recipient address, BEFORE showing the card payment form.
 app.post("/api/create-payment-intent", async (req, res) => {
@@ -146,14 +188,27 @@ app.post("/api/create-payment-intent", async (req, res) => {
     return res.status(400).json({ error: `Note is too long (${NOTE_LIMIT} character max).` });
   }
 
-  try {
-    // Optional but recommended: verify the US address before charging
-    // anyone, so you're not billing people for undeliverable mail.
-    const verified = await verifyAddress(recipient);
-    if (!verified.deliverable) {
-      return res.status(400).json({ error: "That address doesn't look deliverable — please double check it." });
-    }
+  if (await isFlagged(note)) {
+    return res.status(400).json({ error: "That note isn't allowed — please revise it." });
+  }
 
+  // Free, local format checks only — no Lob deliverability call here. That
+  // call is a real, billed API request every time it fires, and gating it
+  // on this pre-payment step means anyone (or any bot) could rack up
+  // unlimited charges against us just by submitting garbage addresses,
+  // with nothing to stop them since no payment is required to reach this
+  // point. A bad-but-plausible-looking address is now accepted and simply
+  // charged for — see the Terms page for how that's handled.
+  let zip = (recipient.zip || "").trim();
+  if (/^\d{9}$/.test(zip)) zip = `${zip.slice(0, 5)}-${zip.slice(5)}`; // e.g. "208953402" -> "20895-3402"
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+    return res.status(400).json({ error: "That doesn't look like a valid 5- or 9-digit ZIP code." });
+  }
+  if (!US_STATE_CODES.has((recipient.state || "").trim().toUpperCase())) {
+    return res.status(400).json({ error: "That doesn't look like a valid state abbreviation." });
+  }
+
+  try {
     const intent = await stripe.paymentIntents.create({
       amount: PRICE_CENTS,
       currency: "usd",
@@ -169,7 +224,7 @@ app.post("/api/create-payment-intent", async (req, res) => {
         recipientLine2: recipient.line2 || "",
         recipientCity: recipient.city,
         recipientState: recipient.state,
-        recipientZip: recipient.zip,
+        recipientZip: zip,
       },
     });
 
@@ -299,26 +354,6 @@ async function sendPostcard(meta) {
     throw new Error(`Lob error ${res.status}: ${body}`);
   }
   return res.json();
-}
-
-async function verifyAddress(recipient) {
-  const res = await fetch("https://api.lob.com/v1/us_verifications", {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + Buffer.from(process.env.LOB_API_KEY + ":").toString("base64"),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      primary_line: recipient.line1,
-      secondary_line: recipient.line2 || "",
-      city: recipient.city,
-      state: recipient.state,
-      zip_code: recipient.zip,
-    }),
-  });
-  const data = await res.json();
-  const deliverable = data.deliverability && data.deliverability !== "undeliverable";
-  return { deliverable, data };
 }
 
 function escapeHtml(str) {
