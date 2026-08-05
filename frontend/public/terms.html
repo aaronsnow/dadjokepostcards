@@ -66,35 +66,48 @@ a { color: #24344A; }
       <p>Pun &amp; Post is a small, experimental side project — not a polished commercial service. It's real: real payment, real postcards, real mail. But it's built and run by one person for fun, not a company with a support team. Please read this page with that in mind.</p>
     </div>
 
-    <h2>What you're buying</h2>
+    <h2 id="what-youre-buying">What you're buying</h2>
     <p>You're paying for a single postcard, printed with a joke you chose and a short note you write, mailed via USPS First Class to an address you provide. Delivery typically takes a few business days after printing, though USPS timing isn't something we can guarantee.</p>
     <p>If your postcard never arrives (please give it a couple of weeks past the typical delivery window before assuming this — mail is sometimes just slow), or if the postcard doesn't reasonably match the preview you approved before paying, just email us at hi@dadjokepostcards.com to request a refund. We'll handle it case by case and won't make you fight for something reasonable.</p>
     <p><strong>Please double-check the recipient's mailing address before you pay.</strong> We don't verify what you've entered before printing and sending. If the address doesn't exist, USPS may return the card to us undelivered; if that happens and you email us, we'll try to make it right. But if the address exists and is simply not the one you intended, there's no way for USPS or us to know that, and the card will just be delivered as addressed. For addresses outside the US, this safety net is weaker: whether an undeliverable card comes back to us depends on the destination country's postal service, and not all of them return undeliverable mail the way USPS does.</p>
 
-    <h2>Built with</h2>
-    <p>In the spirit of this being an experiment in quickly building something real: Pun &amp; Post is stitched together from a few outside services, each handling one piece of the job.</p>
-    <p>— <strong>The jokes</strong> come live from <a href="https://icanhazdadjoke.com" target="_blank" rel="noopener">icanhazdadjoke.com</a>, a public joke API.<br />
-    — <strong>Payment</strong> is processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. <br />
-    — <strong>Printing and mailing</strong> is handled by <a href="https://www.lob.com" target="_blank" rel="noopener">Lob</a>. </p>
+    <h2 id="built-with">Built with</h2>
+    <p>In the spirit of this being an experiment in quickly building something real: Pun &amp; Post is stitched together from a few outside services, each handling one piece of the job.
+    </p>
     
-    <h2>Privacy — what happens to your information</h2>
+    <p>
+      <ul>
+    <li><strong>The jokes</strong> come live from <a href="https://icanhazdadjoke.com" target="_blank" rel="noopener">icanhazdadjoke.com</a>, a public joke API.</li>
+    <li><strong>Payment</strong> is processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. </li>
+    <li><strong>Printing and mailing</strong> is handled by <a href="https://www.lob.com" target="_blank" rel="noopener">Lob</a>. </li>
+    <li><a href="https://www.goatcounter.com" target="_blank" rel="noopener">GoatCounter</a> provides some basic, privacy-friendly analytics.</li>
+    <li>Postcard content is screened by the <a href="https://developers.openai.com/api/docs/guides/moderation" target="_blank" rel="noopener">OpenAI Moderation API</a>.</li>
+      </ul>  
+    </p>
+    <p>
+      This has been, first and foremost, a project-driven way to get knee-deep in coding with AI and learn by doing something fun. <a href="https://claude.ai" target="_blank" rel="noopener">Claude</a> did all the heavy lifting: the architecture, code, build setup, integrations, bug fixes.
+    </p>
+    <p>The whole project is open-source, up on <a href="https://github.com/aaronsnow/dadjokepostcards" target="_blank" rel="noopener">GitHub</a>.
+    </p>
+    
+    <h2 id="privacy">Privacy — what happens to your information</h2>
     <p>We built this to hold onto as little of your information as possible ourselves. Our own system has no database, and nothing about your order is stored on our own servers. But that doesn't mean nothing is stored anywhere:
     <p>— Your payment details and the content of your order (the joke, your note, your name, and the recipient's name and address) are sent to Stripe as part of processing your order. See <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's privacy policy</a> for how they handle this information, including how long they retain it.</p>
     <p>— The recipient's address and the postcard's content are also sent to Lob to actually print and mail it. See <a href="https://www.lob.com/privacy" target="_blank" rel="noopener">Lob's privacy policy</a> and their <a href="https://help.lob.com/resources/data-retention" target="_blank" rel="noopener">data retention policy</a> for exactly how long they keep the recipient's address and other mailpiece data (90 days by default, as of when this was written).</p>
     <p>We don't and won't ever sell, share, or use your information for anything beyond fulfilling the order you placed, except as described below, or where required by law.</p>
 
   
-    <h2>Content policy</h2>
-    <p>Don't use this to send anything illegal, threatening, harassing, hateful, or otherwise abusive. We run an automated check on the note field before checkout to catch obvious cases, but it isn't perfect — it can miss things, and it doesn't (and can't) evaluate a note in light of who it's being sent to. This policy applies regardless of whether our filter happens to catch a given note, and we reserve the right to refuse, cancel, or refund any order for any reason.</p>
+    <h2 id="content-policy">Content policy</h2>
+    <p>Don't use this to send anything illegal, threatening, harassing, hateful, or otherwise abusive. We run an automated check on the note field before checkout to catch obvious cases, but it isn't perfect — it can miss things, and it doesn't (and can't) evaluate a note in light of who it's being sent to. This policy applies regardless of whether our filter happens to catch a given note, and we reserve the right to refuse, cancel, or refund any order for any reason. (The automation might occasionally also overcorrect and disallow legit content. Sorry! Please try another wording.)</p>
     <p>If we're contacted by law enforcement in connection with an order, we'll cooperate, including by providing whatever order information we have access to (mainly whatever data Stripe has retained).</p>
 
-    <h2>Age</h2>
+    <h2 id="age">Age</h2>
     <p>This is intended for adults. If you're under 18, please have a parent or guardian place the order.</p>
 
-    <h2>Liability</h2>
+    <h2 id="liability">Liability</h2>
     <p>This is a small side project, run without a company or a legal team behind it. It's provided as-is. We'll do our best to make things right if something goes wrong.</p>
 
-    <h2>Contact</h2>
+    <h2 id="contact">Contact</h2>
     <p>hi@dadjokepostcards.com</p>
   </div>
 </body>

@@ -664,12 +664,12 @@ function PostcardApp() {
                     <>
                       {" "}
                       <a
-                        href="/terms.html"
+                        href="/terms.html#content-policy"
                         target="_blank"
                         rel="noopener"
                         style={{ color: "#BC4430", textDecoration: "underline" }}
                       >
-                        See our Terms.
+                        See our content policy
                       </a>
                     </>
                   )}
@@ -891,9 +891,17 @@ function PostcardApp() {
 
         <footer className="mt-12 text-center text-[11px]" style={{ color: "#9C9483" }}>
           Fresh dadjokes, delivered by mail. Pun &amp; Post.
-          {" · "}
-          <a href="/terms.html" style={{ color: "#9C9483", textDecoration: "underline" }}>
+          &nbsp; &nbsp;
+          <a href="/terms.html" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
             Terms and Privacy
+          </a>
+          {" | "}
+          <a href="/terms.html#built-with" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
+            Built With
+          </a>
+          {" | "}
+          <a href="/terms.html#contact" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
+            Contact
           </a>
         </footer>
       </div>
