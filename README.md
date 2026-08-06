@@ -22,9 +22,12 @@ cp .env.example .env
 Open `.env` and fill in your Stripe test key and Lob test key (see accounts
 section below). Then:
 ```
-npm start
+npm run dev
 ```
-It should print `Server listening on 3001`. Leave this running.
+This auto-restarts the server whenever you save a change to `server.js` —
+handy while you're actively working on it. (`npm start` also works, for a
+one-off run with no auto-restart.) It should print `Server listening on
+3001`. Leave this running.
 
 **Frontend**, in a second terminal:
 ```
@@ -37,8 +40,21 @@ Open `.env` and set `VITE_API_BASE=http://localhost:3001`. Then:
 npm run dev
 ```
 It'll print a `localhost` URL — open that in your browser. Click "Next
-joke" a few times; you should see genuinely different jokes each time.
-If you don't, check the backend terminal for errors first.
+joke" a few times; you should see genuinely different jokes each time —
+and "Previous joke" should take you back through ones you've already
+seen, without fetching a new one. If Next joke doesn't work, check the
+backend terminal for errors first.
+
+> **⚠️ Before you test a real payment locally: Stripe test mode and
+> Lob test mode are two completely independent switches, and both need
+> to be off.** There's nothing in this code that ties them together.
+> A successful *Stripe test* payment (using their fake `4242...` card)
+> still fires a real webhook — and if `LOB_API_KEY` in your `.env`
+> happens to be a **live** key at that moment, it'll create and mail
+> a real, billed postcard anyway, Stripe test mode notwithstanding.
+> Always double-check `LOB_API_KEY` starts with `test_` before doing
+> any local checkout testing — this isn't hypothetical, it's exactly
+> how a real card ended up getting mailed during development.
 
 ---
 
@@ -53,43 +69,47 @@ verify your identity or add a bank account until you're ready to go live.
 Put those test keys in `backend/.env`.
 
 Optional:
-- **OpenAI Moderation API** — [developers.openai.com](https://developers.openai.com/api/docs/guides/moderation) — for filtering out illegal/abusive entries (imperfectly)
-- **GoatCounter** — [goatcounter.com](https://www.goatcounter.com) — for collecting some basic, privacy-protective analytics
+- **OpenAI Moderation API** — [developers.openai.com](https://developers.openai.com/api/docs/guides/moderation) — for filtering out illegal/abusive entries (imperfectly). The endpoint itself is free, but OpenAI still requires a small **prepaid balance** on the account before any API key works at all. If your very first request comes back `429`, that's almost always this, not real rate limiting — add a few dollars of credit under Settings → Billing.
+- **GoatCounter** — [goatcounter.com](https://www.goatcounter.com) — for collecting some basic, privacy-protective analytics. You'll need your own site code — see `VITE_GOATCOUNTER_CODE` in `frontend/.env.example`, deliberately left unset in any environment other than your real production deploy.
 
-For using these, see backend/.env.example and frontend/.env.example .
+For using these, see `backend/.env.example` and `frontend/.env.example` .
 
 ---
 
 ## 3. Deploying for real
 
-(I use [Railway](https://railway.app) for both backend and frontend)
+(I use [Railway](https://railway.app) for both backend and frontend —
+one project, two services pointed at the same repo, different root
+directories. But this can work pretty much anywhere.)
 
 **Backend**:
 1. Push this whole folder to a GitHub repo.
 2. New Project → connect the repo → set the root directory to `backend`.
 3. It auto-detects `npm start`. Add the same environment variables from
    `backend/.env.example`, filled in with your real (test, for now) keys.
-4. Once deployed you'll get a URL like `https://yourapp.onrender.com`.
+4. Once deployed you'll get a URL like `https://yourapp.up.railway.app`.
 
 **Stripe webhook** (do this right after the backend is deployed):
 1. Stripe dashboard → Developers → Webhooks → Add endpoint.
-2. URL: `https://yourapp.onrender.com/api/stripe-webhook`
+2. URL: `https://yourapp.up.railway.app/api/stripe-webhook`
 3. Event: `payment_intent.succeeded`
 4. Copy the signing secret it gives you into your backend's
    `STRIPE_WEBHOOK_SECRET` environment variable, redeploy.
 
 **Frontend**:
-1. New Project → connect the same repo → root directory `frontend`.
-2. Set environment variable `VITE_API_BASE` to your backend's URL from above.
-3. Deploy. You'll get a URL like `https://yourapp.vercel.app`.
+1. New Project (or new service in the same project) → connect the same
+   repo → root directory `frontend`.
+2. Set environment variable `VITE_API_BASE` to your backend's URL from
+   above.
+3. Deploy. You'll get a URL like `https://yourapp-frontend.up.railway.app`.
 
 **Test it end-to-end** using Stripe's test card `4242 4242 4242 4242`,
 any future expiry date, any 3-digit CVC. Confirm a test postcard shows up
 in your Lob dashboard.
 
 **Go live** by swapping every test key (Stripe + Lob) for a live key, in
-your backend's environment variables. Stripe will ask you to verify your
-identity/bank details before it lets you switch — that's normal. Send
+your production backend and frontend environment variables. ⚠️ Note: Stripe will ask you to verify your
+identity and bank details before it lets you switch; it's normal, but note that it can take a couple business days. Send
 yourself one real postcard before opening it up to anyone else.
 
 ---
