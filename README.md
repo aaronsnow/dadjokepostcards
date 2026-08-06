@@ -52,11 +52,19 @@ verify your identity or add a bank account until you're ready to go live.
 
 Put those test keys in `backend/.env`.
 
+Optional:
+- **OpenAI Moderation API** — [developers.openai.com](https://developers.openai.com/api/docs/guides/moderation) — for filtering out illegal/abusive entries (imperfectly)
+- **GoatCounter** — [goatcounter.com](https://www.goatcounter.com) — for collecting some basic, privacy-protective analytics
+
+For using these, see backend/.env.example and frontend/.env.example .
+
 ---
 
 ## 3. Deploying for real
 
-**Backend** → [Render](https://render.com) or [Railway](https://railway.app):
+(I use [Railway](https://railway.app) for both backend and frontend)
+
+**Backend**:
 1. Push this whole folder to a GitHub repo.
 2. New Project → connect the repo → set the root directory to `backend`.
 3. It auto-detects `npm start`. Add the same environment variables from
@@ -70,7 +78,7 @@ Put those test keys in `backend/.env`.
 4. Copy the signing secret it gives you into your backend's
    `STRIPE_WEBHOOK_SECRET` environment variable, redeploy.
 
-**Frontend** → same provider (or [Vercel](https://vercel.com)/[Netlify](https://netlify.com)):
+**Frontend**:
 1. New Project → connect the same repo → root directory `frontend`.
 2. Set environment variable `VITE_API_BASE` to your backend's URL from above.
 3. Deploy. You'll get a URL like `https://yourapp.vercel.app`.
@@ -88,11 +96,7 @@ yourself one real postcard before opening it up to anyone else.
 
 ## 4. Custom domain (optional)
 
-Buy a domain from any registrar (Cloudflare's is priced at cost, no
-markup). In your frontend host's dashboard, add it as a custom domain and
-create the DNS record it asks for at your registrar. Do the same for the
-backend with a subdomain like `api.yourdomain.com` if you want a tidier
-URL, then update `VITE_API_BASE` to match. SSL is issued automatically.
+Buy a domain from any registrar. In your frontend host's dashboard, add it as a custom domain and create the DNS record it asks for at your registrar. Do the same for the backend with a subdomain like `api.yourdomain.com` if you want a tidier URL, then update `VITE_API_BASE` to match. SSL is issued automatically.
 
 If you change domains, remember to also update:
 - The Stripe webhook URL (step above)
