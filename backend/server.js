@@ -14,6 +14,8 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import Stripe from "stripe";
 import fetch from "node-fetch";
 import "dotenv/config";
@@ -46,6 +48,18 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
   .map((o) => o.trim())
   .filter(Boolean);
 
+if (allowedOrigins.length === 0) {
+  // Not fatal — the app still runs — but this means ANY website can call
+  // these APIs cross-origin, so it's worth knowing loudly rather than
+  // silently, especially once this is getting real traffic.
+  console.warn(
+    "WARNING: FRONTEND_ORIGIN is not set — CORS is wide open (any origin allowed). " +
+      "Set FRONTEND_ORIGIN in this environment's variables to restrict it."
+  );
+}
+
+app.use(helmet());
+
 app.use(
   cors({
     origin: allowedOrigins.length
@@ -53,6 +67,43 @@ app.use(
       : "*",
   })
 );
+
+// A generous ceiling on the whole API — not meant to stop a determined
+// abuser (that's what the stricter per-route limits below are for), just to
+// cap total request volume from any one IP so a runaway script or bot can't
+// hammer the server indefinitely.
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(generalLimiter);
+
+// /api/joke proxies to icanhazdadjoke.com, a free public API. Hammering
+// this endpoint risks getting OUR server rate-limited or blocked by THEM —
+// which would break the joke feature for every real visitor, not just the
+// abuser. Kept tighter than the general limiter for that reason.
+const jokeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests — please slow down." },
+});
+
+// Each call here creates a real (if uncharged) Stripe PaymentIntent.
+// Uncapped, a script could create an unbounded number of these — not
+// directly costly since nothing is charged until payment, but it's the
+// closest thing to a real abuse surface in this app, so it gets the
+// tightest limit of the three.
+const createIntentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts — please wait a bit and try again." },
+});
 
 // Stripe can occasionally redeliver the same webhook event (e.g. after a
 // slow response), and running two `stripe listen` sessions locally at once
@@ -120,7 +171,7 @@ app.use(express.json());
 //    Browsers can't call icanhazdadjoke.com from client-side JS — it doesn't
 //    return CORS headers — so the request has to be proxied through here,
 //    server-to-server, where CORS doesn't apply.
-app.get("/api/joke", async (req, res) => {
+app.get("/api/joke", jokeLimiter, async (req, res) => {
   try {
     const jokeRes = await fetch("https://icanhazdadjoke.com/", {
       headers: {
@@ -146,6 +197,16 @@ app.get("/api/price", (req, res) => {
   res.json({ priceCents: PRICE_CENTS });
 });
 
+// OpenAI's default harassment threshold turned out to be too sensitive for
+// this app's normal tone — affectionate-but-blunt sign-offs ("Clean up your
+// act, kid!") were tripping it in the 0.40-0.53 range while near-identical
+// notes with a different word choice scored under it. Testing suggested 0.6
+// as a cutoff that still catches genuinely hostile language without
+// blocking typical dad-joke-postcard ribbing. Only overriding this one
+// category — every other category (violence, hate, sexual content,
+// self-harm, etc.) still uses OpenAI's own default judgment.
+const HARASSMENT_THRESHOLD = 0.6;
+
 // Checks the note against OpenAI's free moderation endpoint before letting
 // an order through. Deliberately fails OPEN, not closed: if OPENAI_API_KEY
 // isn't set, the request errors, or OpenAI is having a bad day, we let the
@@ -168,7 +229,45 @@ async function isFlagged(note) {
       return false;
     }
     const data = await res.json();
-    return data.results?.[0]?.flagged === true;
+    const result = data.results?.[0];
+    if (!result) return false;
+
+    const categories = result.categories || {};
+    const scores = result.category_scores || {};
+
+    // Same as OpenAI's own verdict for every category except harassment,
+    // where the raised threshold above applies instead of their default.
+    const finalFlagged = Object.entries(categories).some(([category, catFlagged]) => {
+      if (!catFlagged) return false;
+      if (category === "harassment") return (scores.harassment ?? 1) >= HARASSMENT_THRESHOLD;
+      return true;
+    });
+
+    if (result.flagged || finalFlagged) {
+      // Without this, a flagged (or overridden) note is a black box — you
+      // know it was blocked or let through but not why. Logging which
+      // category actually tripped (and its score), plus whether our
+      // harassment threshold changed OpenAI's own verdict, turns "why did
+      // this happen?" from a guess into something you can just look up.
+      // Logs the note text too, since it's already been sent to OpenAI
+      // regardless; drop that part if you'd rather these logs not include
+      // what people wrote.
+      const triggered = Object.entries(categories)
+        .filter(([, catFlagged]) => catFlagged)
+        .map(([category]) => `${category} (${scores[category]?.toFixed(3)})`)
+        .join(", ");
+      const overrideNote =
+        result.flagged !== finalFlagged
+          ? finalFlagged
+            ? " [harassment threshold override: now BLOCKED]"
+            : " [harassment threshold override: now ALLOWED]"
+          : "";
+      console.log(
+        `Note ${finalFlagged ? "flagged" : "allowed despite OpenAI flag"} — categories: ${triggered || "none listed"}${overrideNote} — note: ${JSON.stringify(note)}`
+      );
+    }
+
+    return finalFlagged;
   } catch (err) {
     console.error("Moderation check failed, allowing note through:", err.message);
     return false;
@@ -177,7 +276,7 @@ async function isFlagged(note) {
 
 // 1. Front end calls this once the user has picked a joke and filled in
 //    the recipient address, BEFORE showing the card payment form.
-app.post("/api/create-payment-intent", async (req, res) => {
+app.post("/api/create-payment-intent", createIntentLimiter, async (req, res) => {
   const { joke, note, recipient } = req.body;
 
   if (!joke || !recipient?.name || !recipient?.line1 || !recipient?.zip) {
@@ -186,6 +285,22 @@ app.post("/api/create-payment-intent", async (req, res) => {
 
   if (note && note.length > NOTE_LIMIT) {
     return res.status(400).json({ error: `Note is too long (${NOTE_LIMIT} character max).` });
+  }
+
+  // Stripe metadata values cap at 500 characters and would otherwise reject
+  // these with an unhelpful error — catch absurdly long input here instead,
+  // with a message that makes sense to a real person.
+  const RECIPIENT_FIELD_LIMIT = 200;
+  const recipientFields = {
+    name: recipient.name,
+    line1: recipient.line1,
+    line2: recipient.line2,
+    city: recipient.city,
+  };
+  for (const [field, value] of Object.entries(recipientFields)) {
+    if (value && value.length > RECIPIENT_FIELD_LIMIT) {
+      return res.status(400).json({ error: `That ${field === "line1" || field === "line2" ? "address line" : field} is too long.` });
+    }
   }
 
   if (await isFlagged(note)) {

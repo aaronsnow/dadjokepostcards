@@ -101,7 +101,14 @@ directories. But this can work pretty much anywhere.)
    repo → root directory `frontend`.
 2. Set environment variable `VITE_API_BASE` to your backend's URL from
    above.
-3. Deploy. You'll get a URL like `https://yourapp-frontend.up.railway.app`.
+3. Also set `VITE_SITE_URL` (this environment's own public URL — e.g. the
+   Railway-generated one for staging, your real domain for production) and
+   `VITE_ROBOTS` (`index, follow` for production, `noindex, nofollow` for
+   staging/preview environments). **These two are required** — unlike
+   `VITE_GOATCOUNTER_CODE`, leaving either unset makes the build itself
+   fail outright, not just degrade gracefully. See `frontend/.env.example`
+   for the full explanation.
+4. Deploy. You'll get a URL like `https://yourapp-frontend.up.railway.app`.
 
 **Test it end-to-end** using Stripe's test card `4242 4242 4242 4242`,
 any future expiry date, any 3-digit CVC. Confirm a test postcard shows up
@@ -121,3 +128,23 @@ Buy a domain from any registrar. In your frontend host's dashboard, add it as a 
 If you change domains, remember to also update:
 - The Stripe webhook URL (step above)
 - `FRONTEND_ORIGIN` in the backend's environment variables
+
+---
+
+## 5. A few things worth knowing
+
+- **Rate limiting**: every `/api/*` route is capped at 300 requests per
+  15 minutes per IP; `/api/joke` and `/api/create-payment-intent` have
+  tighter limits of their own on top of that (see the `*Limiter` constants
+  near the top of `server.js`). If you ever need to raise these — e.g. a
+  legitimate burst of traffic gets rate-limited — that's where to look.
+- **Security headers**: `helmet()` is applied globally in `server.js` for
+  a sane baseline (no custom configuration beyond its defaults).
+- **404s**: this app has no client-side router — it's one page driven by
+  internal state, plus `terms.html` as a second real static page. Vite's
+  `appType` is set to `"mpa"` in `vite.config.js` specifically so any
+  *other* path returns a genuine 404 (served from `frontend/public/404.html`)
+  instead of silently falling back to the homepage, which is Vite's
+  default behavior for single-page apps and was actively wrong here.
+- **Moderation threshold**: see the note next to `OPENAI_API_KEY` in
+  `backend/.env.example`.

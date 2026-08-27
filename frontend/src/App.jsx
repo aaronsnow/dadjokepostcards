@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { RefreshCw, Send, ArrowLeft, MapPin, CreditCard, CheckCircle2, Loader2, Mail } from "lucide-react";
+import { RefreshCw, Send, ArrowLeft, CreditCard, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -272,8 +272,9 @@ function PostcardBack({ joke, recipient, note }) {
 
 function StepLabel({ n, active, done, children }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
       <div
+        aria-hidden="true"
         className="w-6 h-6 rounded-full flex items-center justify-center text-[11px]"
         style={{
           fontFamily: "'IBM Plex Mono', monospace",
@@ -285,7 +286,7 @@ function StepLabel({ n, active, done, children }) {
         {done ? <CheckCircle2 size={13} color="#F7F1E3" /> : n}
       </div>
       <span
-        className="text-[11px] uppercase tracking-wide hidden sm:inline"
+        className="text-[11px] uppercase tracking-wide sr-only sm:not-sr-only sm:inline"
         style={{
           fontFamily: "'IBM Plex Mono', monospace",
           color: active || done ? "#24344A" : "#9C9483",
@@ -503,7 +504,7 @@ function PostcardApp() {
           >
             Pun &amp; Post
           </h1>
-          <p className="mt-2 text-sm italic" style={{ color: "#6B6558" }}>
+          <p className="mt-2 text-sm italic" style={{ color: "#605A4F" }}>
             One groan-worthy joke, mailed to someone who deserves it: {formatPrice(priceCents)}
           </p>
         </header>
@@ -530,7 +531,7 @@ function PostcardApp() {
           <div>
             <PostcardFront joke={joke} loading={jokeLoading} stamped={stamped} />
             {jokeError && (
-              <p className="text-xs text-center mt-3" style={{ color: "#BC4430" }}>
+              <p className="text-xs text-center mt-3" style={{ color: "#9F3928" }}>
                 Couldn't reach the joke service — showing a backup joke instead.
               </p>
             )}
@@ -589,47 +590,59 @@ function PostcardApp() {
             <div className="sm:col-span-3">
               <h2
                 className="text-sm uppercase tracking-wide mb-3"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
               >
                 Who's it going to?
               </h2>
               <div className="grid grid-cols-2 gap-3">
+                <label htmlFor="recipient-name" className="sr-only">Recipient name</label>
                 <input
+                  id="recipient-name"
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Recipient name"
                   value={recipient.name}
                   onChange={(e) => setRecipient({ ...recipient, name: e.target.value })}
                 />
+                <label htmlFor="recipient-line1" className="sr-only">Street address</label>
                 <input
+                  id="recipient-line1"
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Street address"
                   value={recipient.line1}
                   onChange={(e) => setRecipient({ ...recipient, line1: e.target.value })}
                 />
+                <label htmlFor="recipient-line2" className="sr-only">Apartment or unit (optional)</label>
                 <input
+                  id="recipient-line2"
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Apt / unit (optional)"
                   value={recipient.line2}
                   onChange={(e) => setRecipient({ ...recipient, line2: e.target.value })}
                 />
+                <label htmlFor="recipient-city" className="sr-only">City</label>
                 <input
+                  id="recipient-city"
                   className="px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="City"
                   value={recipient.city}
                   onChange={(e) => setRecipient({ ...recipient, city: e.target.value })}
                 />
+                <label htmlFor="recipient-state" className="sr-only">State</label>
                 <input
+                  id="recipient-state"
                   className="px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="State"
                   value={recipient.state}
                   onChange={(e) => setRecipient({ ...recipient, state: e.target.value })}
                 />
+                <label htmlFor="recipient-zip" className="sr-only">ZIP code</label>
                 <input
+                  id="recipient-zip"
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="ZIP code"
@@ -640,11 +653,13 @@ function PostcardApp() {
 
               <h2
                 className="text-sm uppercase tracking-wide mt-5 mb-2"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
               >
                 Add a note (optional — don't forget to sign it!)
               </h2>
+              <label htmlFor="postcard-note" className="sr-only">Note to include on the postcard</label>
               <textarea
+                id="postcard-note"
                 className="w-full px-3 py-2 text-sm rounded-sm resize-none"
                 style={inputStyle}
                 rows={4}
@@ -653,12 +668,12 @@ function PostcardApp() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Wish you were here! Miss you already. Love, Dad"
               />
-              <p className="text-[11px] text-right mt-1" style={{ color: "#9C9483" }}>
+              <p className="text-[11px] text-right mt-1" style={{ color: "#6B5B45" }}>
                 {note.length}/{NOTE_LIMIT}
               </p>
 
               {paymentError && (
-                <p className="text-xs mt-3" style={{ color: "#BC4430" }}>
+                <p className="text-xs mt-3" style={{ color: "#9F3928" }}>
                   {paymentError}
                   {paymentError.includes("isn't allowed") && (
                     <>
@@ -667,7 +682,7 @@ function PostcardApp() {
                         href="/terms.html#content-policy"
                         target="_blank"
                         rel="noopener"
-                        style={{ color: "#BC4430", textDecoration: "underline" }}
+                        style={{ color: "#9F3928", textDecoration: "underline" }}
                       >
                         See our content policy
                       </a>
@@ -680,7 +695,7 @@ function PostcardApp() {
                 <button
                   onClick={() => setStep("browse")}
                   className="flex items-center gap-1 px-4 py-2 text-sm"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
                 >
                   <ArrowLeft size={14} /> Back
                 </button>
@@ -709,7 +724,7 @@ function PostcardApp() {
               <div className="h-full flex flex-col">
                 <p
                   className="text-[11px] uppercase tracking-wide mb-2 text-center"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
                 >
                   Front
                 </p>
@@ -720,7 +735,7 @@ function PostcardApp() {
               <div className="h-full flex flex-col">
                 <p
                   className="text-[11px] uppercase tracking-wide mb-2 text-center"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#9C9483" }}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
                 >
                   Back
                 </p>
@@ -749,7 +764,7 @@ function PostcardApp() {
               <button
                 onClick={() => setStep("compose")}
                 className="flex items-center gap-1 px-4 py-2 text-sm"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
               >
                 <ArrowLeft size={14} /> Edit
               </button>
@@ -782,16 +797,18 @@ function PostcardApp() {
             </div>
             <form onSubmit={submitPayment} className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
-                <CreditCard size={16} color="#6B6558" />
+                <CreditCard size={16} color="#605A4F" />
                 <span
                   className="text-sm uppercase tracking-wide"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
                 >
                   Payment details
                 </span>
               </div>
 
+              <label htmlFor="billing-name" className="sr-only">Name on card</label>
               <input
+                id="billing-name"
                 className="w-full px-3 py-2 text-sm rounded-sm"
                 style={inputStyle}
                 placeholder="Name on card"
@@ -808,7 +825,7 @@ function PostcardApp() {
                         fontSize: "14px",
                         fontFamily: "'Libre Baskerville', serif",
                         color: "#24344A",
-                        "::placeholder": { color: "#9C9483" },
+                        "::placeholder": { color: "#656055" },
                       },
                     },
                   }}
@@ -816,7 +833,7 @@ function PostcardApp() {
               </div>
 
               {paymentError && (
-                <p className="text-xs" style={{ color: "#BC4430" }}>
+                <p className="text-xs" style={{ color: "#9F3928" }}>
                   {paymentError}
                 </p>
               )}
@@ -841,7 +858,7 @@ function PostcardApp() {
                   type="button"
                   onClick={() => setStep("review")}
                   className="flex items-center gap-1 px-4 py-2 text-sm"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558" }}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
                 >
                   <ArrowLeft size={14} /> Back
                 </button>
@@ -870,37 +887,35 @@ function PostcardApp() {
             <h2 className="text-xl mb-2" style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}>
               On its way
             </h2>
-            <p className="text-sm mb-4" style={{ color: "#4A4636" }}>
-              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed. Your
-              postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
+            <p className="text-sm mb-2" style={{ color: "#4A4636" }}>
+              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed.
+            </p>
+            <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
+              Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
               business days once it's printed and in the mail.
             </p>
-            <div className="flex items-center justify-center gap-2 text-xs mb-6" style={{ color: "#9C9483" }}>
-              <MapPin size={12} />
-              {recipient.city}, {recipient.state}
-            </div>
             <button
               onClick={resetAll}
               className="px-5 py-2.5 rounded-sm text-sm uppercase tracking-wide"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", border: "1.5px solid #24344A", color: "#24344A" }}
+              style={{ fontFamily: "'IBM Plex Mono', monospace", border: "1.5px solid #24344A", color: "#24344A", marginTop: "1em" }}
             >
               Send another postcard
             </button>
           </div>
         )}
 
-        <footer className="mt-12 text-center text-[11px]" style={{ color: "#9C9483" }}>
+        <footer className="mt-12 text-center text-[11px]" style={{ color: "#656055" }}>
           Fresh dadjokes, delivered by mail. Pun &amp; Post.
           &nbsp; &nbsp;
-          <a href="/terms.html" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
+          <a href="/terms.html" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
             Terms and Privacy
           </a>
           {" | "}
-          <a href="/terms.html#built-with" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
+          <a href="/terms.html#built-with" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
             Built With
           </a>
           {" | "}
-          <a href="/terms.html#contact" target="_blank" rel="noopener" style={{ color: "#9C9483", textDecoration: "underline" }}>
+          <a href="/terms.html#contact" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
             Contact
           </a>
         </footer>
