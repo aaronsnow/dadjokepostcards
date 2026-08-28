@@ -159,4 +159,4 @@ service is just static files. The `frontend/Caddyfile` makes this work
 correctly. Without that file, Railway auto-generates a Caddyfile for you,
 and its default doesn't include error-page handling: a missing path gets a
 bare 404 status return, served by Railway's edge rather than reaching your
-app's logic at all. (See he `handle_errors` block in this file.)
+app's logic at all. (See the `handle_errors` block in this file.)
