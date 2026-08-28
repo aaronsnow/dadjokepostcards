@@ -1,0 +1,22 @@
+# Tells Railpack's native (Caddy-based) static site serving where the
+# built site lives and how to handle unmatched paths.
+#
+# This only takes effect now that frontend/package.json has no "start"
+# script — a custom start command tells Railpack to skip its own static
+# serving entirely and run that command instead, which is what we were
+# doing before (via `vite preview`) and is why our custom 404 handling in
+# vite.config.js never actually ran in production: that script only
+# affects `vite preview`/`vite dev`, and Railpack's native Caddy path
+# doesn't invoke either of those at all.
+
+# Directory Vite builds into
+root: dist
+
+# This app has no client-side router — it's one page driven by internal
+# state, plus terms.html as a second real static page. index_fallback:true
+# is Railpack's SPA setting (serve index.html for any unmatched path,
+# because a client-side router will handle it in the browser). We want the
+# opposite: a genuinely missing path should be a real 404, serving dist/404.html
+# (present automatically once index_fallback is off — see Railpack's Caddy
+# docs), not silently serve the homepage.
+index_fallback: false
