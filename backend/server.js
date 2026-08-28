@@ -69,12 +69,27 @@ app.use(
 );
 
 // A generous ceiling on the whole API — not meant to stop a determined
-// abuser (that's what the stricter per-route limits below are for), just to
-// cap total request volume from any one IP so a runaway script or bot can't
-// hammer the server indefinitely.
+// abuser (that's what the stricter per-route limits below are for), just
+// a backstop against something hitting many endpoints at once. Set above
+// the sum of the per-route ceilings below so it never becomes the
+// binding constraint on any single route before that route's own limiter
+// would — a shared limiter set too low silently overrides more
+// carefully-tuned per-route ones, since every request counts against
+// both simultaneously.
+//
+// Applies to /api/stripe-webhook too, deliberately. Signature
+// verification (see that route) protects against forged events, but not
+// against a flood of garbage requests burning CPU on failed verification
+// attempts — that's a real volumetric-abuse target the signature check
+// doesn't address. 1200/15min is far above any realistic legitimate
+// volume (including Stripe's retry bursts after downtime) for a site
+// this size, and — importantly — only counts requests that actually
+// arrive at THIS server; other merchants' Stripe webhook traffic goes to
+// their own endpoints and never touches this counter, regardless of
+// shared source IPs.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 300,
+  limit: 1200,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -83,27 +98,52 @@ app.use(generalLimiter);
 // /api/joke proxies to icanhazdadjoke.com, a free public API. Hammering
 // this endpoint risks getting OUR server rate-limited or blocked by THEM —
 // which would break the joke feature for every real visitor, not just the
-// abuser. Kept tighter than the general limiter for that reason.
+// abuser. Kept tighter than the general limiter for that reason. 60/min
+// (~900 over 15 min, matching the window generalLimiter above was sized
+// for) comfortably covers even enthusiastic "Next Joke" clicking.
 const jokeLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 30,
+  limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests — please slow down." },
 });
 
-// Each call here creates a real (if uncharged) Stripe PaymentIntent.
-// Uncapped, a script could create an unbounded number of these — not
-// directly costly since nothing is charged until payment, but it's the
-// closest thing to a real abuse surface in this app, so it gets the
-// tightest limit of the three.
+// /api/price and /api/create-payment-intent are user-facing but see very
+// low legitimate call volume per visit (price: once per page load;
+// payment-intent: once per order, or a few times if someone edits their
+// note and goes through review again). Each gets its own independent
+// 150/15min allowance below — not a shared pool between them.
+const priceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests — please slow down." },
+});
+
+// Each call here creates a real (if uncharged) Stripe PaymentIntent. The
+// only legitimate way to trigger this more than once per order is the
+// edit-and-recheck loop (review -> back to edit -> forward again creates
+// a fresh intent each time) — that requires actually typing between
+// clicks, which self-paces well under this limit for any real person.
 const createIntentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 15,
+  limit: 150,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts — please wait a bit and try again." },
 });
+
+// Stripe webhooks are verified by cryptographic signature below
+// (stripe.webhooks.constructEvent) — that's what protects against a
+// FORGED event (someone faking a successful payment to get a free
+// postcard). It does nothing against a FLOOD of garbage requests with no
+// valid signature, though — those still cost real CPU to reject, one at
+// a time. This route relies on generalLimiter (applied globally via
+// app.use() above) for that volumetric protection, same as every other
+// route — no per-route limiter needed here given how low legitimate
+// volume for this endpoint actually is.
 
 // Stripe can occasionally redeliver the same webhook event (e.g. after a
 // slow response), and running two `stripe listen` sessions locally at once
@@ -193,7 +233,7 @@ app.get("/api/joke", jokeLimiter, async (req, res) => {
 // price, so the on-screen display can never disagree with what's actually
 // charged — that's still decided entirely by PRICE_CENTS above, this just
 // lets the display reflect it without needing its own hardcoded value.
-app.get("/api/price", (req, res) => {
+app.get("/api/price", priceLimiter, (req, res) => {
   res.json({ priceCents: PRICE_CENTS });
 });
 

@@ -133,18 +133,30 @@ If you change domains, remember to also update:
 
 ## 5. A few things worth knowing
 
-- **Rate limiting**: every `/api/*` route is capped at 300 requests per
-  15 minutes per IP; `/api/joke` and `/api/create-payment-intent` have
-  tighter limits of their own on top of that (see the `*Limiter` constants
-  near the top of `server.js`). If you ever need to raise these — e.g. a
-  legitimate burst of traffic gets rate-limited — that's where to look.
+- **Rate limiting**: a general cap is implemented for all api calls; the cap on `/api/joke` is more generous (people might want to browse lots of jokes quickly), but all the other endpoints are pretty tightly constrained. See the `*Limiter` constants near the top of `server.js`.
 - **Security headers**: `helmet()` is applied globally in `server.js` for
   a sane baseline (no custom configuration beyond its defaults).
-- **404s**: this app has no client-side router — it's one page driven by
-  internal state, plus `terms.html` as a second real static page. Vite's
-  `appType` is set to `"mpa"` in `vite.config.js` specifically so any
-  *other* path returns a genuine 404 (served from `frontend/public/404.html`)
-  instead of silently falling back to the homepage, which is Vite's
-  default behavior for single-page apps and was actively wrong here.
 - **Moderation threshold**: see the note next to `OPENAI_API_KEY` in
   `backend/.env.example`.
+
+### Production vs local 404 handling
+
+This app has no client-side router — it's one page driven by internal
+state, plus the static pages in `frontend/public`. A missing path should
+return a genuine 404, not silently fall back to the homepage (Vite's
+default behavior for single-page apps, but not what I wanted here).
+
+**Locally**, `npm run dev` / `npm run preview` get this from Vite itself:
+`appType: "mpa"` in `vite.config.js` makes unmatched paths return a real
+404, and a small plugin (`custom404Plugin`, same file) fills in the
+response body with `frontend/public/404.html` instead of leaving it
+empty. (See the comments in that file for why it's built the way it is —
+getting it right took a few wrong turns worth not repeating.)
+
+**In production, none of that runs at all.** Railpack instead serves the
+built `dist/` folder directly via its own Caddy instance and the frontend
+service is just static files. The `frontend/Caddyfile` makes this work
+correctly. Without that file, Railway auto-generates a Caddyfile for you,
+and its default doesn't include error-page handling: a missing path gets a
+bare 404 status return, served by Railway's edge rather than reaching your
+app's logic at all. (See he `handle_errors` block in this file.)
