@@ -918,6 +918,15 @@ function PostcardApp() {
           <a href="/terms.html#contact" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
             Contact
           </a>
+          {" | "}
+          <a
+            href="https://github.com/aaronsnow/dadjokepostcards"
+            target="_blank"
+            rel="noopener"
+            style={{ color: "#656055", textDecoration: "underline" }}
+          >
+            GitHub
+          </a>
         </footer>
       </div>
     </div>
