@@ -36,6 +36,12 @@ const FONT_IMPORT = `
 const DEFAULT_PRICE_CENTS = 499; // fallback shown only until /api/price responds
 const NOTE_LIMIT = 280;
 
+// Pledge details — keep in sync with the "Charitable giving" section of
+// terms.html if either of these ever changes.
+const CHARITY_NAME = "the Jazz Foundation of America";
+const CHARITY_URL = "https://jazzfoundation.org";
+const CHARITY_PER_CARD = "$2";
+
 // Set VITE_API_BASE in your .env file (or your hosting provider's env vars)
 // to your deployed backend's URL, e.g. "https://your-app.onrender.com".
 // Until that's set, the app falls back to a public demo proxy so there's
@@ -507,6 +513,20 @@ function PostcardApp() {
           <p className="mt-2 text-sm italic" style={{ color: "#605A4F" }}>
             One groan-worthy joke, mailed to someone who deserves it: {formatPrice(priceCents)}
           </p>
+          <p
+            className="mt-2 text-[11px] tracking-wide"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+          >
+            {CHARITY_PER_CARD} of every card sold supports{" "}
+            <a
+              href={CHARITY_URL}
+              target="_blank"
+              rel="noopener"
+              style={{ color: "#24344A", textDecoration: "underline" }}
+            >
+              {CHARITY_NAME}
+            </a>
+          </p>
         </header>
 
         <div className="flex items-center justify-center gap-5 mb-8 flex-wrap">
@@ -893,6 +913,21 @@ function PostcardApp() {
             <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
               Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
               business days once it's printed and in the mail.
+            </p>
+            <p
+              className="text-sm mb-6"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
+            >
+              Thank you, and, no joke, thank you for supporting{" "}
+              <a
+                href={CHARITY_URL}
+                target="_blank"
+                rel="noopener"
+                style={{ color: "#4A4636", textDecoration: "underline" }}
+              >
+                {CHARITY_NAME}
+              </a>
+              .
             </p>
             <button
               onClick={resetAll}
