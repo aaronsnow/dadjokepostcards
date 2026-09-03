@@ -35,10 +35,23 @@ const US_STATE_CODES = new Set([
   "DC", "AS", "GU", "MP", "PR", "VI",
   "AA", "AE", "AP",
 ]);
-// Mirrors NOTE_LIMIT in the frontend's App.jsx. Enforced here too since the
-// frontend's maxLength is trivially bypassable by anyone calling this API
-// directly.
+// The frontend used to hardcode its own copies of NOTE_LIMIT and the
+// CHARITY_* values below, with comments asking whoever changed one to
+// remember to update the other. It now fetches all of these from
+// /api/config (see that route below) instead, so this file is the one
+// real source of truth. NOTE_LIMIT still needs to be enforced here
+// independently, though — the frontend's copy is only for display
+// (maxLength, the character counter); a client can send any length it
+// wants directly to this API regardless of what the frontend shows, so
+// this check is the one that actually matters.
 const NOTE_LIMIT = 280;
+
+// What actually gets printed on the mailed postcard (see backHtml below)
+// — the frontend's PostcardBack is only a preview of these, fetched from
+// /api/config at load time, not hardcoded there anymore.
+const CHARITY_PER_CARD = "$2";
+const CHARITY_NAME = "the Jazz Foundation of America";
+const CHARITY_URL = "https://jazzfoundation.org"; // not used elsewhere in this file — exists so /api/config has it to hand to the frontend
 
 // FRONTEND_ORIGIN can be a single URL or a comma-separated list (e.g. your
 // custom domain plus the Railway-provided one, while you're transitioning
@@ -235,6 +248,29 @@ app.get("/api/joke", jokeLimiter, async (req, res) => {
 // lets the display reflect it without needing its own hardcoded value.
 app.get("/api/price", priceLimiter, (req, res) => {
   res.json({ priceCents: PRICE_CENTS });
+});
+
+// Same idea as /api/price, extended to everything else the frontend used
+// to keep its own hardcoded (and driftable) copy of: the charity pledge
+// details, the note character limit (display only — see the real
+// enforcement above, near NOTE_LIMIT), and the return address for the
+// postcard-back preview. That return address isn't sensitive — it's
+// printed on every postcard this app mails — so there's no reason to
+// gate it behind anything.
+app.get("/api/config", priceLimiter, (req, res) => {
+  res.json({
+    charityName: CHARITY_NAME,
+    charityUrl: CHARITY_URL,
+    charityPerCard: CHARITY_PER_CARD,
+    noteLimit: NOTE_LIMIT,
+    returnAddress: {
+      name: process.env.RETURN_ADDRESS_NAME || "",
+      line1: process.env.RETURN_ADDRESS_LINE1 || "",
+      city: process.env.RETURN_ADDRESS_CITY || "",
+      state: process.env.RETURN_ADDRESS_STATE || "",
+      zip: process.env.RETURN_ADDRESS_ZIP || "",
+    },
+  });
 });
 
 // OpenAI's default harassment threshold turned out to be too sensitive for
@@ -463,6 +499,9 @@ async function sendPostcard(meta) {
       </div>
       <div style="position:absolute;top:0.55in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
         Somebody paid to send you this groaner. You can return the favor at <span style="font-weight:700">dadjokepostcards.com</span>
+      </div>
+      <div style="position:absolute;top:1.02in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-style:italic;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#605A4F;">
+        ${CHARITY_PER_CARD} of every card sold goes to<br/><span style="color:#196A9C">${CHARITY_NAME}</span>
       </div>
     </body></html>`;
 

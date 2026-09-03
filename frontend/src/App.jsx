@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { RefreshCw, Send, ArrowLeft, CreditCard, CheckCircle2, Loader2, Mail } from "lucide-react";
+import { RefreshCw, Send, ArrowLeft, CreditCard, CheckCircle2, Loader2 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -34,13 +34,22 @@ const FONT_IMPORT = `
 `;
 
 const DEFAULT_PRICE_CENTS = 499; // fallback shown only until /api/price responds
-const NOTE_LIMIT = 280;
 
-// Pledge details — keep in sync with the "Charitable giving" section of
-// terms.html if either of these ever changes.
-const CHARITY_NAME = "the Jazz Foundation of America";
-const CHARITY_URL = "https://jazzfoundation.org";
-const CHARITY_PER_CARD = "$2";
+// Fallback values only, used until /api/config responds (or if it fails) —
+// the backend is the real source of truth for all of these now (see
+// /api/config in server.js), fetched once on load via the config state
+// below. This eliminates the old failure mode of updating one of these in
+// server.js and forgetting to also update it here.
+//
+// terms.html is the one remaining place NOT covered by this — it's a
+// static file, not part of this React app, so it still has its own
+// hand-written copy of the charity pledge language. Keep that in sync by
+// hand if the charity or amount ever changes.
+const DEFAULT_NOTE_LIMIT = 280;
+const DEFAULT_CHARITY_NAME = "the Jazz Foundation of America";
+const DEFAULT_CHARITY_URL = "https://jazzfoundation.org";
+const DEFAULT_CHARITY_PER_CARD = "$2";
+const DEFAULT_RETURN_ADDRESS = { name: "Pun & Post", line1: "", city: "Smallville", state: "KS", zip: "66002" };
 
 // Set VITE_API_BASE in your .env file (or your hosting provider's env vars)
 // to your deployed backend's URL, e.g. "https://your-app.onrender.com".
@@ -85,6 +94,24 @@ function useFitScale(ref, deps, minScale = 0.75, step = 0.05) {
   }, [ref]);
 
   return scale;
+}
+
+// Matches Tailwind's "sm" breakpoint (640px), already used elsewhere in this
+// file (e.g. the step labels) as the mobile/desktop line. Used for postcard
+// preview elements that need different sizing above vs. below that width —
+// see PostcardFront and PostcardBack.
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 640 : true
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const onChange = () => setIsDesktop(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
 }
 
 // Mirrors insertPunchlineBreaks in the backend's server.js — keep both in
@@ -146,37 +173,50 @@ function Postmark({ stamped, scale = 1 }) {
   );
 }
 
-function StampCorner() {
-  return (
-    <div
-      className="w-14 h-16 shrink-0 flex items-center justify-center"
-      style={{
-        border: "2px dashed #9C9483",
-        backgroundColor: "#F0E9D8",
-      }}
-    >
-      <Mail size={20} color="#9C9483" strokeWidth={1.5} />
-    </div>
-  );
-}
-
 function AirmailBorder({ children }) {
   const stripeStyle = {
     backgroundImage:
-      "repeating-linear-gradient(-45deg, #BC4430 0 6px, #F7F1E3 6px 9px, #24344A 9px 15px, #F7F1E3 15px 18px)",
+      "repeating-linear-gradient(-45deg, #BC4430 0 12px, #F7F1E3 12px 18px, #24344A 18px 30px, #F7F1E3 30px 36px)",
   };
   return (
     <div className="rounded-sm overflow-hidden aspect-[3/2] flex flex-col" style={{ border: "1px solid #D8CFB8" }}>
-      <div className="h-[6px] shrink-0" style={stripeStyle} />
+      <div className="h-[12px] shrink-0" style={stripeStyle} />
       <div className="flex-1 min-h-0" style={{ backgroundColor: "#F7F1E3" }}>{children}</div>
-      <div className="h-[6px] shrink-0" style={stripeStyle} />
+      <div className="h-[12px] shrink-0" style={stripeStyle} />
     </div>
   );
 }
 
-function PostcardFront({ joke, loading, stamped }) {
+function PostcardFront({ joke, loading, stamped, size = "normal" }) {
   const contentRef = useRef(null);
   const fitScale = useFitScale(contentRef, [joke, loading], 0.5);
+  const isDesktop = useIsDesktop();
+  const isLarge = size === "large";
+  const isCompose = size === "compose";
+
+  // Three variants, each in a different container width, each needing
+  // different desktop sizing:
+  // - "large" (browse step, shown alone at full width): full, undiminished
+  //   size — the big hero preview.
+  // - "compose" (Address it step, sharing a 5-column grid with the form):
+  //   a moderate reduction — this column is narrower than "large" but
+  //   wider than "normal" ends up looking right at.
+  // - "normal" (Review step, a 2-column grid split with the back of the
+  //   card): the most reduced — this is also where the stamp specifically
+  //   needed an *extra* reduction on top of the shared scale, since it was
+  //   disproportionately large relative to the label/joke there. Compose
+  //   didn't have that problem — its stamp scales evenly with the rest.
+  // All still multiply by fitScale, so a long joke still auto-shrinks to
+  // fit rather than overflowing.
+  const deskScale = !isDesktop ? 1 : isLarge ? 1 : isCompose ? 0.88 : 0.78;
+  const scale = fitScale * deskScale;
+  const labelPx = isLarge && isDesktop ? 14 * fitScale : 10 * scale;
+  const jokePx = isLarge && isDesktop ? 24 * fitScale : 18 * scale;
+  const stampScale = isLarge && isDesktop
+    ? fitScale * 1.35
+    : isDesktop && !isCompose
+      ? scale * 0.825 // ~17.5% smaller than label/joke — review-specific fix
+      : scale;
 
   return (
     <AirmailBorder>
@@ -184,11 +224,11 @@ function PostcardFront({ joke, loading, stamped }) {
         <div className="flex justify-between items-start">
           <span
             className="tracking-[0.2em] uppercase"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558", fontSize: `${10 * fitScale}px` }}
+            style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#6B6558", fontSize: `${labelPx}px` }}
           >
             Dept. of Questionable Humor
           </span>
-          <Postmark stamped={stamped} scale={fitScale} />
+          <Postmark stamped={stamped} scale={stampScale} />
         </div>
         <div className="flex-1 flex items-center justify-center px-2 py-6">
           {loading ? (
@@ -199,7 +239,7 @@ function PostcardFront({ joke, loading, stamped }) {
               style={{
                 fontFamily: "'Libre Baskerville', serif",
                 color: "#24344A",
-                fontSize: `${18 * fitScale}px`,
+                fontSize: `${jokePx}px`,
               }}
             >
               <JokeText text={joke} />
@@ -211,7 +251,7 @@ function PostcardFront({ joke, loading, stamped }) {
   );
 }
 
-function PostcardBack({ joke, recipient, note }) {
+function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityPerCard, returnAddress }) {
   const contentRef = useRef(null);
   const fitScale = useFitScale(contentRef, [
     note,
@@ -222,52 +262,135 @@ function PostcardBack({ joke, recipient, note }) {
     recipient.state,
     recipient.zip,
   ]);
+  const isDesktop = useIsDesktop();
+  // Fixed sizes, deliberately NOT multiplied by fitScale. This text is
+  // constant app copy, not user-entered content — it doesn't need to
+  // participate in the auto-shrink-to-fit mechanism meant for
+  // unpredictable note/address length. (Previously multiplying by
+  // fitScale caused a second, unwanted shrink on top of these already-
+  // correct target sizes whenever fitScale legitimately dropped for OTHER
+  // reasons — e.g. a long note — in the same card.)
+  const taglineBasePx = isDesktop ? 6 : 6.75;
+  const jfaBasePx = isDesktop ? 5.36 : 6;
 
   return (
     <AirmailBorder>
-      <div ref={contentRef} className="h-full min-h-0 p-5 flex gap-3">
-        <div style={{ flexBasis: "40%" }} className="min-w-0">
-          <p
-            className="italic leading-snug"
-            style={{
-              fontFamily: "'Libre Baskerville', serif",
-              color: "#4A4636",
-              fontSize: `${12 * fitScale}px`,
-              overflowWrap: "break-word",
-            }}
-          >
-            {note ? note : "No personal note added."}
-          </p>
-        </div>
-        <div style={{ flexBasis: "58%" }} className="min-w-0 flex flex-col justify-between items-end">
-          <p
-            className="font-medium leading-snug tracking-wide text-right"
-            style={{
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: "#BC4430",
-              fontSize: `${9 * fitScale}px`,
-            }}
-          >
-            Somebody paid to send you this groaner. You can return the favor at <span style={{ fontWeight: 700 }}>dadjokepostcards.com</span>
-          </p>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div style={{ transform: `scale(${fitScale})`, transformOrigin: "top right" }}>
-              <StampCorner />
-            </div>
-            <div
-              className="text-right leading-snug"
+      <div ref={contentRef} className="h-full min-h-0 p-2 pb-0 relative">
+        <div className="h-full flex gap-3">
+          <div style={{ flexBasis: "40%" }} className="min-w-0">
+            {note && (
+              <p
+                className="italic leading-snug"
+                style={{
+                  fontFamily: "'Libre Baskerville', serif",
+                  color: "#4A4636",
+                  fontSize: isDesktop ? `${12 * fitScale}px` : "15px",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {note}
+              </p>
+            )}
+          </div>
+          <div style={{ flexBasis: "58%" }} className="min-w-0 flex flex-col items-end">
+            <p
+              className="font-medium leading-snug tracking-wide text-right"
               style={{
                 fontFamily: "'IBM Plex Mono', monospace",
-                color: "#24344A",
-                fontSize: `${11 * fitScale}px`,
+                color: "#BC4430",
+                fontSize: `${taglineBasePx}px`,
               }}
             >
-              <div className="font-medium">{recipient.name || "Recipient name"}</div>
-              <div>{recipient.line1 || "Street address"}</div>
-              {recipient.line2 && <div>{recipient.line2}</div>}
-              <div>
-                {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (formatZip(recipient.zip) || "00000")}
-              </div>
+              Somebody paid to send you this groaner. You can
+              <br />
+              return the favor at <span style={{ fontWeight: 700 }}>dadjokepostcards.com</span>
+            </p>
+            <p
+              className="leading-snug tracking-wide text-right italic"
+              style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: "#605A4F",
+                fontSize: `${jfaBasePx}px`,
+                marginTop: "12px",
+              }}
+            >
+              {charityPerCard} of every card sold goes to
+              <br />
+              <span style={{ color: "#196A9C" }}>{charityName}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Approximates Lob's auto-placed address block: white background,
+            flush bottom-right, overlapping the top half of the bottom
+            stripe. This is illustrative only — Lob positions the real one
+            automatically; we don't control it, just try to preview it
+            accurately.
+
+            Fixed target sizes below, not multiplied by fitScale — same
+            reasoning as the tagline/JFA text: fitScale dropping to its own
+            0.75 floor was silently shrinking these on top of already-
+            correct target sizes (the exact 4.5px/30x24 vs. intended
+            6px/40x32 mismatch that surfaced this). Only the destination
+            address on desktop is left fitScale-linked, since that's
+            unbounded user-entered text that may need to shrink to avoid
+            overflowing the block; the return address and stamp are fixed
+            content/shape, same as the tagline case. */}
+        <div
+          className="absolute flex flex-col"
+          style={{
+            right: `${6 * fitScale}px`,
+            bottom: "-6px", // half of AirmailBorder's 12px stripe height
+            width: "53%",
+            height: "65%",
+            backgroundColor: "#FFFFFF",
+            padding: isDesktop
+              ? `${12 * fitScale}px ${15 * fitScale}px ${4.5 * fitScale}px ${6 * fitScale}px`
+              : "24px 30px 9px 12px",
+          }}
+        >
+          <div className="flex justify-between items-start gap-2">
+            <div
+              className="text-left leading-tight uppercase"
+              style={{
+                fontFamily: "Arial, sans-serif",
+                color: "#000000",
+                fontSize: isDesktop ? "6px" : "9px",
+              }}
+            >
+              {returnAddress.name || "Return address"}
+              <br />
+              {returnAddress.line1 && (
+                <>
+                  {returnAddress.line1}
+                  <br />
+                </>
+              )}
+              {returnAddress.city || "City"}, {returnAddress.state || "ST"} {returnAddress.zip || "00000"}
+            </div>
+            <div
+              className="shrink-0"
+              style={{
+                width: isDesktop ? "45px" : "60px",
+                height: isDesktop ? "36px" : "48px",
+                border: "1px dashed #9C9483",
+              }}
+            />
+          </div>
+          <div
+            className="text-left leading-snug uppercase"
+            style={{
+              fontFamily: "Arial, sans-serif",
+              color: "#000000",
+              fontSize: isDesktop ? `${10 * fitScale}px` : "12px",
+              marginTop: "3em",
+            }}
+          >
+            <div className="font-medium">{recipient.name || "Recipient name"}</div>
+            <div>{recipient.line1 || "Street address"}</div>
+            {recipient.line2 && <div>{recipient.line2}</div>}
+            <div>
+              {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (formatZip(recipient.zip) || "00000")}
             </div>
           </div>
         </div>
@@ -346,6 +469,32 @@ function PostcardApp() {
       .catch(() => {
         // Keep DEFAULT_PRICE_CENTS — this is only a display value anyway;
         // the actual charge is always decided server-side regardless.
+      });
+  }, []);
+
+  const [config, setConfig] = useState({
+    noteLimit: DEFAULT_NOTE_LIMIT,
+    charityName: DEFAULT_CHARITY_NAME,
+    charityUrl: DEFAULT_CHARITY_URL,
+    charityPerCard: DEFAULT_CHARITY_PER_CARD,
+    returnAddress: DEFAULT_RETURN_ADDRESS,
+  });
+
+  useEffect(() => {
+    if (!API_BASE) return; // demo/preview context — just use the defaults
+    fetch(`${API_BASE}/api/config`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        setConfig((prev) => ({
+          noteLimit: typeof data.noteLimit === "number" ? data.noteLimit : prev.noteLimit,
+          charityName: data.charityName || prev.charityName,
+          charityUrl: data.charityUrl || prev.charityUrl,
+          charityPerCard: data.charityPerCard || prev.charityPerCard,
+          returnAddress: data.returnAddress || prev.returnAddress,
+        }));
+      })
+      .catch(() => {
+        // Keep the defaults above — same reasoning as the price fetch.
       });
   }, []);
 
@@ -517,14 +666,14 @@ function PostcardApp() {
             className="mt-2 text-[11px] tracking-wide"
             style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
           >
-            {CHARITY_PER_CARD} of every card sold supports{" "}
+            {config.charityPerCard} of every card sold supports{" "}
             <a
-              href={CHARITY_URL}
+              href={config.charityUrl}
               target="_blank"
               rel="noopener"
               style={{ color: "#24344A", textDecoration: "underline" }}
             >
-              {CHARITY_NAME}
+              {config.charityName}
             </a>
           </p>
         </header>
@@ -549,7 +698,7 @@ function PostcardApp() {
 
         {step === "browse" && (
           <div>
-            <PostcardFront joke={joke} loading={jokeLoading} stamped={stamped} />
+            <PostcardFront joke={joke} loading={jokeLoading} stamped={stamped} size="large" />
             {jokeError && (
               <p className="text-xs text-center mt-3" style={{ color: "#9F3928" }}>
                 Couldn't reach the joke service — showing a backup joke instead.
@@ -605,7 +754,7 @@ function PostcardApp() {
         {step === "compose" && (
           <div className="grid sm:grid-cols-5 gap-8">
             <div className="sm:col-span-2">
-              <PostcardFront joke={joke} loading={false} stamped={true} />
+              <PostcardFront joke={joke} loading={false} stamped={true} size="compose" />
             </div>
             <div className="sm:col-span-3">
               <h2
@@ -683,13 +832,13 @@ function PostcardApp() {
                 className="w-full px-3 py-2 text-sm rounded-sm resize-none"
                 style={inputStyle}
                 rows={4}
-                maxLength={NOTE_LIMIT}
+                maxLength={config.noteLimit}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Wish you were here! Miss you already. Love, Dad"
               />
               <p className="text-[11px] text-right mt-1" style={{ color: "#6B5B45" }}>
-                {note.length}/{NOTE_LIMIT}
+                {note.length}/{config.noteLimit}
               </p>
 
               {paymentError && (
@@ -760,7 +909,15 @@ function PostcardApp() {
                   Back
                 </p>
                 <div className="flex-1">
-                  <PostcardBack joke={joke} recipient={recipient} note={note} />
+                  <PostcardBack
+                    joke={joke}
+                    recipient={recipient}
+                    note={note}
+                    charityName={config.charityName}
+                    charityUrl={config.charityUrl}
+                    charityPerCard={config.charityPerCard}
+                    returnAddress={config.returnAddress}
+                  />
                 </div>
               </div>
             </div>
@@ -915,17 +1072,17 @@ function PostcardApp() {
               business days once it's printed and in the mail.
             </p>
             <p
-              className="text-sm mb-6"
+              className="italic text-sm mb-6"
               style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
             >
               Thank you, and, no joke, thank you for supporting{" "}
               <a
-                href={CHARITY_URL}
+                href={config.charityUrl}
                 target="_blank"
                 rel="noopener"
                 style={{ color: "#4A4636", textDecoration: "underline" }}
               >
-                {CHARITY_NAME}
+                {config.charityName}
               </a>
               .
             </p>
