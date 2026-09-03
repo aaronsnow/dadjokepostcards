@@ -1064,17 +1064,14 @@ function PostcardApp() {
             <h2 className="text-xl mb-2" style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}>
               On its way
             </h2>
-            <p className="text-sm mb-2" style={{ color: "#4A4636" }}>
+            <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
               Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed.
             </p>
             <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
               Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
               business days once it's printed and in the mail.
             </p>
-            <p
-              className="text-sm mb-6"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
-            >
+            <p className="text-sm mb-6" style={{ color: "#4A4636" }} >
               Thank you, and, no joke, thank you for supporting{" "}
               <a
                 href={config.charityUrl}
