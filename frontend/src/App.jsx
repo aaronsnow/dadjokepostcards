@@ -220,7 +220,7 @@ function PostcardFront({ joke, loading, stamped, size = "normal" }) {
 
   return (
     <AirmailBorder>
-      <div ref={contentRef} className="h-full min-h-0 p-6 flex flex-col justify-between">
+      <div ref={contentRef} className={`h-full min-h-0 ${isLarge ? "p-6" : "p-4"} flex flex-col justify-between`}>
         <div className="flex justify-between items-start">
           <span
             className="tracking-[0.2em] uppercase"
@@ -230,7 +230,7 @@ function PostcardFront({ joke, loading, stamped, size = "normal" }) {
           </span>
           <Postmark stamped={stamped} scale={stampScale} />
         </div>
-        <div className="flex-1 flex items-center justify-center px-2 py-6">
+        <div className="flex-1 flex items-center justify-center px-2 pt-2 pb-6">
           {loading ? (
             <Loader2 className="animate-spin" size={28} color="#9C9483" />
           ) : (
@@ -1072,7 +1072,7 @@ function PostcardApp() {
               business days once it's printed and in the mail.
             </p>
             <p
-              className="italic text-sm mb-6"
+              className="text-sm mb-6"
               style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
             >
               Thank you, and, no joke, thank you for supporting{" "}
