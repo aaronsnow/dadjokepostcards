@@ -23,6 +23,25 @@ import "dotenv/config";
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICE_CENTS = parseInt(process.env.PRICE_CENTS, 10) || 499;
+
+// Railway injects RAILWAY_ENVIRONMENT into every deployment it runs,
+// staging and production both — it's never present on a local machine
+// unless someone deliberately sets it there, which makes it a safer
+// "am I actually deployed?" signal than NODE_ENV (which isn't reliably
+// set either way). Used below to disable rate limiting locally (so
+// rapid manual testing — e.g. clicking "Next joke" repeatedly — isn't
+// throttled) and to enable a local-only test helper for finding long
+// jokes on demand. Both stay fully active on Railway regardless of what
+// a client sends, since this is checked server-side, not client-side.
+const isLocalDev = !process.env.RAILWAY_ENVIRONMENT;
+
+// Wraps a rate limiter so it's skipped entirely in local dev (see
+// isLocalDev above) — kept fully active everywhere this is actually
+// deployed, since that check only ever evaluates true when it isn't.
+function maybeLimit(limiter) {
+  return isLocalDev ? (req, res, next) => next() : limiter;
+}
+
 // The 50 states, DC, USPS-recognized territories, and military
 // designations (AA/AE/AP for APO/FPO addresses). Used as a free, local
 // sanity check on the state field — catches "XX"-style typos at zero cost,
@@ -106,7 +125,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use(generalLimiter);
+if (!isLocalDev) app.use(generalLimiter);
 
 // /api/joke proxies to icanhazdadjoke.com, a free public API. Hammering
 // this endpoint risks getting OUR server rate-limited or blocked by THEM —
@@ -224,7 +243,65 @@ app.use(express.json());
 //    Browsers can't call icanhazdadjoke.com from client-side JS — it doesn't
 //    return CORS headers — so the request has to be proxied through here,
 //    server-to-server, where CORS doesn't apply.
-app.get("/api/joke", jokeLimiter, async (req, res) => {
+app.get("/api/joke", maybeLimit(jokeLimiter), async (req, res) => {
+  // Local-dev-only test helper (see isLocalDev above — this block simply
+  // doesn't exist as far as a deployed environment is concerned, since
+  // isLocalDev can only be true when RAILWAY_ENVIRONMENT is unset).
+  // ?long=1 fetches a batch of real jokes via icanhazdadjoke's /search
+  // endpoint (up to 30 per request) and returns the single longest one
+  // found, instead of one random joke — makes it possible to reliably
+  // test the print-overflow fix (jokeFontSizePt, near sendPostcard below)
+  // by just clicking "Next joke" a couple of times, rather than clicking
+  // repeatedly and hoping the random API happens to return something long.
+  if (isLocalDev && req.query.long === "1") {
+    try {
+      // /search defaults to page 1 when no page is given — always the
+      // exact same 30 jokes back, hence always the exact same "longest of
+      // this batch" every time. Fetch page 1 first just to learn how many
+      // pages actually exist, then (if there's more than one) fetch a
+      // genuinely random OTHER page and use that batch instead — this is
+      // what actually gives different results across calls.
+      const firstPageRes = await fetch("https://icanhazdadjoke.com/search?limit=30", {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "Pun & Post (https://example.com)",
+        },
+      });
+      if (!firstPageRes.ok) throw new Error(`upstream ${firstPageRes.status}`);
+      const firstPageData = await firstPageRes.json();
+
+      let results = firstPageData.results || [];
+      const totalPages = firstPageData.total_pages || 1;
+      if (totalPages > 1) {
+        const randomPage = 1 + Math.floor(Math.random() * totalPages);
+        const randomPageRes = await fetch(`https://icanhazdadjoke.com/search?limit=30&page=${randomPage}`, {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Pun & Post (https://example.com)",
+          },
+        });
+        if (randomPageRes.ok) {
+          const randomPageData = await randomPageRes.json();
+          if (randomPageData.results?.length) results = randomPageData.results;
+        }
+        // If this second request fails for any reason, results still
+        // holds page 1's jokes from above — degrades to "always the same
+        // joke" rather than failing outright, which is an acceptable
+        // fallback for a dev-only test helper.
+      }
+
+      const longest = results.reduce(
+        (best, r) => (r.joke && r.joke.length > (best?.length || 0) ? r.joke : best),
+        null
+      );
+      if (!longest) throw new Error("no results in search response");
+      return res.json({ joke: longest });
+    } catch (err) {
+      console.error("Long-joke test fetch failed:", err.message);
+      return res.status(502).json({ error: "Could not fetch a long test joke right now" });
+    }
+  }
+
   try {
     const jokeRes = await fetch("https://icanhazdadjoke.com/", {
       headers: {
@@ -246,7 +323,7 @@ app.get("/api/joke", jokeLimiter, async (req, res) => {
 // price, so the on-screen display can never disagree with what's actually
 // charged — that's still decided entirely by PRICE_CENTS above, this just
 // lets the display reflect it without needing its own hardcoded value.
-app.get("/api/price", priceLimiter, (req, res) => {
+app.get("/api/price", maybeLimit(priceLimiter), (req, res) => {
   res.json({ priceCents: PRICE_CENTS });
 });
 
@@ -257,7 +334,7 @@ app.get("/api/price", priceLimiter, (req, res) => {
 // postcard-back preview. That return address isn't sensitive — it's
 // printed on every postcard this app mails — so there's no reason to
 // gate it behind anything.
-app.get("/api/config", priceLimiter, (req, res) => {
+app.get("/api/config", maybeLimit(priceLimiter), (req, res) => {
   res.json({
     charityName: CHARITY_NAME,
     charityUrl: CHARITY_URL,
@@ -352,7 +429,7 @@ async function isFlagged(note) {
 
 // 1. Front end calls this once the user has picked a joke and filled in
 //    the recipient address, BEFORE showing the card payment form.
-app.post("/api/create-payment-intent", createIntentLimiter, async (req, res) => {
+app.post("/api/create-payment-intent", maybeLimit(createIntentLimiter), async (req, res) => {
   const { joke, note, recipient } = req.body;
 
   if (!joke || !recipient?.name || !recipient?.line1 || !recipient?.zip) {
@@ -480,7 +557,7 @@ async function sendPostcard(meta) {
           </g>
         </svg>
       </div>
-      <div style="position:absolute;top:1.95in;left:0.5in;right:0.5in;text-align:center;font-size:16pt;line-height:1.4;color:#24344A;">
+      <div style="position:absolute;top:1.95in;left:0.5in;right:0.5in;text-align:center;font-size:${jokeFontSizePt(meta.joke)}pt;line-height:1.4;color:#24344A;">
         ${jokeHtml(meta.joke)}
       </div>
     </body></html>`;
@@ -566,7 +643,58 @@ function escapeHtml(str) {
 // below if we ran this afterward.
 function insertPunchlineBreaks(text) {
   if (!text) return text;
-  return text.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+  // A run of 2+ periods (". . . ." or "......") used as a dramatic pause
+  // needs to survive intact — a joke found in testing ("...Scotch and
+  // . . . . . . . . . . . . . Coke...") depends on the reader actually
+  // seeing that pause; the punchline is the bartender asking about it.
+  // Collapsing it to a single ellipsis would silently break the joke.
+  // Instead: temporarily swap the spacing WITHIN such a run for a
+  // placeholder that won't match the sentence-split regex below, then
+  // restore the real spacing afterward — the dots stay together as one
+  // unbroken run in the output, while everything else still splits
+  // normally. (Without this, each individual dot triggered its own
+  // paragraph break — 15 of them for that joke — wildly inflating its
+  // estimated printed height for text that isn't even particularly long.)
+  const PAUSE_PLACEHOLDER = "\u0000";
+  const guarded = text.replace(/(?:\.\s*){2,}/g, (run) => run.replace(/\s/g, PAUSE_PLACEHOLDER));
+  const withBreaks = guarded.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+  return withBreaks.split(PAUSE_PLACEHOLDER).join(" ");
+}
+
+// The on-site preview (PostcardFront/fitScale) shrinks long jokes based on
+// REAL measured overflow in the browser — there's no equivalent here, since
+// this HTML is only ever rendered by Lob's printer, not by us. Without
+// this, a long joke (jokes come from a public API and vary a lot — some
+// are one-liners, some are multi-sentence "shaggy dog" setups) just grows
+// past its box with nothing to stop it: it can run into or past the
+// bottom stripe on the actual mailed card, exactly as it did before this
+// existed. This estimates a safe font size instead of measuring real
+// overflow (which we can't do without a rendering engine) — the character-
+// width assumption is deliberately generous (wide), so this errs toward
+// shrinking a bit more than strictly necessary rather than risk the
+// original bug recurring on some joke this hasn't been tested against.
+function jokeFontSizePt(joke) {
+  const formatted = insertPunchlineBreaks(joke || "");
+  const paragraphs = formatted.split("\n");
+  const extraParagraphs = paragraphs.length - 1; // each gets a 1em margin-top, same as jokeHtml below
+
+  const boxWidthPt = 5.25 * 72; // left:0.5in, right:0.5in on the 6.25in-wide card
+  const boxHeightPt = 1.9 * 72; // top:1.95in down to the bottom stripe at top:3.85in
+  const SAFETY_MARGIN_PT = 6;
+  const MAX_SIZE = 16; // matches the original fixed size, for short/typical jokes
+  const MIN_SIZE = 8; // a floor for legibility — an extremely long joke still uses this, accepting some overflow risk rather than going smaller
+
+  for (let size = MAX_SIZE; size >= MIN_SIZE; size -= 0.5) {
+    const avgCharWidth = size * 0.55; // deliberately generous per-character estimate
+    const charsPerLine = Math.max(1, Math.floor(boxWidthPt / avgCharWidth));
+    let totalLines = 0;
+    for (const p of paragraphs) {
+      totalLines += Math.max(1, Math.ceil(p.length / charsPerLine));
+    }
+    const textHeight = totalLines * size * 1.4 + extraParagraphs * size; // 1.4 matches the template's line-height
+    if (textHeight <= boxHeightPt - SAFETY_MARGIN_PT) return size;
+  }
+  return MIN_SIZE;
 }
 
 // Renders each line as its own block with margin-top, mirroring the

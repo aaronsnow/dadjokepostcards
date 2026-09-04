@@ -139,7 +139,15 @@ function useIsUltraNarrow() {
 // provide one itself.
 function insertPunchlineBreaks(text) {
   if (!text) return text;
-  return text.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+  // A run of 2+ periods used as a dramatic pause (". . . ." or "......")
+  // needs to survive intact — some jokes' punchline depends on actually
+  // seeing the pause. Temporarily swap the spacing within such a run for
+  // a placeholder that won't match the split below, then restore it
+  // afterward, so the dots stay together as one unbroken run.
+  const PAUSE_PLACEHOLDER = "\u0000";
+  const guarded = text.replace(/(?:\.\s*){2,}/g, (run) => run.replace(/\s/g, PAUSE_PLACEHOLDER));
+  const withBreaks = guarded.replace(/([.?!]['"\u2019\u201D]?)\s+/g, "$1\n");
+  return withBreaks.split(PAUSE_PLACEHOLDER).join(" ");
 }
 
 function JokeText({ text }) {
@@ -562,7 +570,13 @@ function PostcardApp() {
     };
     try {
       if (API_BASE) {
-        const res = await fetch(`${API_BASE}/api/joke`);
+        // VITE_TEST_LONG_JOKES is a local-dev-only convenience — set it in
+        // your own .env, never in Railway's env vars for staging/production
+        // (the backend independently refuses to honor this outside local
+        // dev regardless, via isLocalDev in server.js, but there's no
+        // reason to rely on that as the only safeguard).
+        const longParam = import.meta.env.VITE_TEST_LONG_JOKES ? "?long=1" : "";
+        const res = await fetch(`${API_BASE}/api/joke${longParam}`);
         if (!res.ok) throw new Error("backend error");
         const data = await res.json();
         recordJoke(data.joke);
@@ -1209,4 +1223,3 @@ export default function DadJokePostcardApp() {
     </Elements>
   );
 }
-
