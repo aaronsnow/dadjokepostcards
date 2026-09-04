@@ -114,6 +114,24 @@ function useIsDesktop() {
   return isDesktop;
 }
 
+// A second, narrower breakpoint below the general mobile/desktop split
+// above. 360px sits between the Galaxy Z Fold 5's folded width (344px,
+// needs this) and the iPhone SE's (375px, doesn't) — the narrowest and
+// second-narrowest devices checked against this preview.
+function useIsUltraNarrow() {
+  const [isUltraNarrow, setIsUltraNarrow] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 360 : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 359px)");
+    const onChange = () => setIsUltraNarrow(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isUltraNarrow;
+}
+
 // Mirrors insertPunchlineBreaks in the backend's server.js — keep both in
 // sync if this pattern changes. Breaks after each sentence-ending
 // punctuation mark, optionally followed by a closing quote, so the
@@ -263,6 +281,7 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
     recipient.zip,
   ]);
   const isDesktop = useIsDesktop();
+  const isUltraNarrow = useIsUltraNarrow();
   // Fixed sizes, deliberately NOT multiplied by fitScale. This text is
   // constant app copy, not user-entered content — it doesn't need to
   // participate in the auto-shrink-to-fit mechanism meant for
@@ -270,8 +289,8 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
   // fitScale caused a second, unwanted shrink on top of these already-
   // correct target sizes whenever fitScale legitimately dropped for OTHER
   // reasons — e.g. a long note — in the same card.)
-  const taglineBasePx = isDesktop ? 6 : 6.75;
-  const jfaBasePx = isDesktop ? 5.36 : 6;
+  const taglineBasePx = isDesktop ? 6 : isUltraNarrow ? 5 : 6;
+  const jfaBasePx = isDesktop ? 5.36 : isUltraNarrow ? 5 : 6;
 
   return (
     <AirmailBorder>
@@ -284,7 +303,7 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
                 style={{
                   fontFamily: "'Libre Baskerville', serif",
                   color: "#4A4636",
-                  fontSize: isDesktop ? `${12 * fitScale}px` : "15px",
+                  fontSize: isDesktop ? `${12 * fitScale}px` : isUltraNarrow ? "9px" : "10px",
                   overflowWrap: "break-word",
                 }}
               >
@@ -346,7 +365,7 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
             backgroundColor: "#FFFFFF",
             padding: isDesktop
               ? `${12 * fitScale}px ${15 * fitScale}px ${4.5 * fitScale}px ${6 * fitScale}px`
-              : "24px 30px 9px 12px",
+              : "12px 12px 9px 12px",
           }}
         >
           <div className="flex justify-between items-start gap-2">
@@ -355,7 +374,7 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
               style={{
                 fontFamily: "Arial, sans-serif",
                 color: "#000000",
-                fontSize: isDesktop ? "6px" : "9px",
+                fontSize: "6px",
               }}
             >
               {returnAddress.name || "Return address"}
@@ -371,8 +390,8 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
             <div
               className="shrink-0"
               style={{
-                width: isDesktop ? "45px" : "60px",
-                height: isDesktop ? "36px" : "48px",
+                width: isDesktop ? "45px" : "40px",
+                height: isDesktop ? "36px" : "32px",
                 border: "1px dashed #9C9483",
               }}
             />
@@ -382,8 +401,8 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
             style={{
               fontFamily: "Arial, sans-serif",
               color: "#000000",
-              fontSize: isDesktop ? `${10 * fitScale}px` : "12px",
-              marginTop: "3em",
+              fontSize: isDesktop ? `${10 * fitScale}px` : "7.5px",
+              marginTop: isDesktop ? "3em" : "1em",
             }}
           >
             <div className="font-medium">{recipient.name || "Recipient name"}</div>
@@ -799,6 +818,7 @@ function PostcardApp() {
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Recipient name"
+                  maxLength={40}
                   value={recipient.name}
                   onChange={(e) => setRecipient({ ...recipient, name: e.target.value })}
                 />
@@ -808,6 +828,7 @@ function PostcardApp() {
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Street address"
+                  maxLength={40}
                   value={recipient.line1}
                   onChange={(e) => setRecipient({ ...recipient, line1: e.target.value })}
                 />
@@ -817,6 +838,7 @@ function PostcardApp() {
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="Apt / unit (optional)"
+                  maxLength={40}
                   value={recipient.line2}
                   onChange={(e) => setRecipient({ ...recipient, line2: e.target.value })}
                 />
@@ -826,6 +848,7 @@ function PostcardApp() {
                   className="px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="City"
+                  maxLength={40}
                   value={recipient.city}
                   onChange={(e) => setRecipient({ ...recipient, city: e.target.value })}
                 />
@@ -835,6 +858,7 @@ function PostcardApp() {
                   className="px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="State"
+                  maxLength={2}
                   value={recipient.state}
                   onChange={(e) => setRecipient({ ...recipient, state: e.target.value })}
                 />
@@ -844,6 +868,7 @@ function PostcardApp() {
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
                   placeholder="ZIP code"
+                  maxLength={10}
                   value={recipient.zip}
                   onChange={(e) => setRecipient({ ...recipient, zip: e.target.value })}
                 />

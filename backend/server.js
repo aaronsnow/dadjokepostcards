@@ -363,10 +363,13 @@ app.post("/api/create-payment-intent", createIntentLimiter, async (req, res) => 
     return res.status(400).json({ error: `Note is too long (${NOTE_LIMIT} character max).` });
   }
 
-  // Stripe metadata values cap at 500 characters and would otherwise reject
-  // these with an unhelpful error — catch absurdly long input here instead,
-  // with a message that makes sense to a real person.
-  const RECIPIENT_FIELD_LIMIT = 200;
+  // USPS Publication 28 (their official addressing standards) documents 40
+  // characters as the max their automated sorting equipment reads per line
+  // for name and secondary address lines — a line beyond that isn't just
+  // ugly, it can get silently ignored by their equipment. This also keeps
+  // these well under Stripe metadata's 500-character cap, which is what
+  // the old, much looser 200-character version of this limit existed for.
+  const RECIPIENT_FIELD_LIMIT = 40;
   const recipientFields = {
     name: recipient.name,
     line1: recipient.line1,
@@ -375,7 +378,7 @@ app.post("/api/create-payment-intent", createIntentLimiter, async (req, res) => 
   };
   for (const [field, value] of Object.entries(recipientFields)) {
     if (value && value.length > RECIPIENT_FIELD_LIMIT) {
-      return res.status(400).json({ error: `That ${field === "line1" || field === "line2" ? "address line" : field} is too long.` });
+      return res.status(400).json({ error: `That ${field === "line1" || field === "line2" ? "address line" : field} is too long (${RECIPIENT_FIELD_LIMIT} character max).` });
     }
   }
 
@@ -500,7 +503,7 @@ async function sendPostcard(meta) {
       <div style="position:absolute;top:0.55in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
         Somebody paid to send you this groaner. You can return the favor at <span style="font-weight:700">dadjokepostcards.com</span>
       </div>
-      <div style="position:absolute;top:1.02in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-style:italic;font-size:7.5pt;line-height:1.4;letter-spacing:0.02em;color:#605A4F;">
+      <div style="position:absolute;top:1.0in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-style:italic;font-size:6.5pt;line-height:1.4;letter-spacing:0.02em;color:#605A4F;">
         ${CHARITY_PER_CARD} of every card sold goes to<br/><span style="color:#196A9C">${CHARITY_NAME}</span>
       </div>
     </body></html>`;
