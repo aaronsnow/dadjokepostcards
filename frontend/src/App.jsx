@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { RefreshCw, Send, ArrowLeft, CreditCard, CheckCircle2, Loader2 } from "lucide-react";
+import { RefreshCw, Send, ArrowLeft, CreditCard, CheckCircle2, Loader2, Share2, Copy } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -456,6 +456,35 @@ function PostcardApp() {
   const [paymentError, setPaymentError] = useState("");
   const [paying, setPaying] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const shareData = {
+    title: "Pun & Post",
+    text: "I just mailed a real postcard with a dad joke on it — check out Pun & Post.",
+    url: window.location.origin,
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      await navigator.share(shareData);
+    } catch (err) {
+      // User canceled the share sheet, or it failed silently — either
+      // way, nothing useful to show them, so just do nothing.
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(shareData.url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      // Clipboard write failed (permissions, older browser) — nothing
+      // more we can reasonably do here.
+    }
+  };
+
 
   const [priceCents, setPriceCents] = useState(DEFAULT_PRICE_CENTS);
 
@@ -666,7 +695,7 @@ function PostcardApp() {
             className="mt-2 text-[11px] tracking-wide"
             style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
           >
-            {config.charityPerCard} of every card sold supports{" "}
+            {config.charityPerCard} of every card sold goes to{" "}
             <a
               href={config.charityUrl}
               target="_blank"
@@ -1064,14 +1093,17 @@ function PostcardApp() {
             <h2 className="text-xl mb-2" style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}>
               On its way
             </h2>
-            <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
+            <p className="text-sm mb-2" style={{ color: "#4A4636" }}>
               Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed.
             </p>
             <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
               Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
               business days once it's printed and in the mail.
             </p>
-            <p className="text-sm mb-6" style={{ color: "#4A4636" }} >
+            <p
+              className="text-sm mb-6"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
+            >
               Thank you, and, no joke, thank you for supporting{" "}
               <a
                 href={config.charityUrl}
@@ -1090,6 +1122,32 @@ function PostcardApp() {
             >
               Send another postcard
             </button>
+            <p
+              className="text-xs"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055", marginTop: "1em" }}
+            >
+              Know someone who'd love this?
+            </p>
+            <div className="flex items-center justify-center gap-4" style={{ marginTop: "0.4em" }}>
+              {typeof navigator !== "undefined" && navigator.share && (
+                <button
+                  onClick={handleNativeShare}
+                  className="flex items-center gap-1.5 text-xs"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
+                >
+                  <Share2 size={12} />
+                  Share
+                </button>
+              )}
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 text-xs"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
+              >
+                <Copy size={12} />
+                {linkCopied ? "Copied!" : "Copy link"}
+              </button>
+            </div>
           </div>
         )}
 
