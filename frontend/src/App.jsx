@@ -1093,18 +1093,15 @@ function PostcardApp() {
             <h2 className="text-xl mb-2" style={{ fontFamily: "'Special Elite', monospace", color: "#24344A" }}>
               On its way
             </h2>
-            <p className="text-sm mb-2" style={{ color: "#4A4636" }}>
-              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed.
-            </p>
             <p className="text-sm mb-6" style={{ color: "#4A4636" }}>
-              Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state} — typically 4–6
-              business days once it's printed and in the mail.
+              Order <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{orderId}</span> is confirmed:
+              Your postcard is headed to {recipient.name} in {recipient.city}, {recipient.state}.
             </p>
             <p
               className="text-sm mb-6"
               style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#4A4636" }}
             >
-              Thank you, and, no joke, thank you for supporting{" "}
+              Thank you, and, no joke, thanks for supporting{" "}
               <a
                 href={config.charityUrl}
                 target="_blank"
@@ -1113,7 +1110,7 @@ function PostcardApp() {
               >
                 {config.charityName}
               </a>
-              .
+              !
             </p>
             <button
               onClick={resetAll}
@@ -1132,8 +1129,8 @@ function PostcardApp() {
               {typeof navigator !== "undefined" && navigator.share && (
                 <button
                   onClick={handleNativeShare}
-                  className="flex items-center gap-1.5 text-xs"
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
+                  className="flex items-center gap-1.5 text-xs font-medium"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#316363" }}
                 >
                   <Share2 size={12} />
                   Share
@@ -1141,8 +1138,8 @@ function PostcardApp() {
               )}
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 text-xs"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#656055" }}
+                className="flex items-center gap-1.5 text-xs font-medium"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#316363" }}
               >
                 <Copy size={12} />
                 {linkCopied ? "Copied!" : "Copy link"}
