@@ -1191,15 +1191,15 @@ function PostcardApp() {
           Fresh dadjokes, delivered by mail. Pun &amp; Post.
           &nbsp; &nbsp;
           <a href="/terms.html" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
-            Terms and Privacy
-          </a>
-          {" | "}
-          <a href="/terms.html#built-with" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
-            Built With
+            About & Terms
           </a>
           {" | "}
           <a href="/terms.html#contact" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
             Contact
+          </a>
+          {" | "}
+          <a href="/terms.html#built-with" target="_blank" rel="noopener" style={{ color: "#656055", textDecoration: "underline" }}>
+            Built With
           </a>
           {" | "}
           <a

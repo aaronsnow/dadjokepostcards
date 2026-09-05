@@ -1,6 +1,18 @@
 # Pun & Post
 
-Pick a dad joke, mail it as a real postcard to someone.
+Pick a groan-worthy joke, have it mailed on a real postcard to someone who deserves it.
+
+## About
+
+This project is an experiment in quickly building something real, stitched together (pretty lightly) from a few outside services, each handling one piece of the job:
+
+* The jokes come live from [icanhazdadjoke.com](https://icanhazdadjoke.com), a public joke API.
+* Payment is processed by [Stripe](https://stripe.com).
+* Printing and mailing is handled by [Lob](https://lob.com).
+* [GoatCounter](https://goatcounter.com) provides some basic, privacy-friendly analytics.
+* Postcard content is screened by the [OpenAI Moderation API](https://developers.openai.com/api/docs/guides/moderation).
+
+## 0. Setup
 
 This folder has two parts that deploy separately:
 
