@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://dadjokepostcards.com/sitemap.xml
+Sitemap: https://www.dadjokepostcards.com/sitemap.xml
