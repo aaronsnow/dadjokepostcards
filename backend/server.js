@@ -21,8 +21,29 @@ import fetch from "node-fetch";
 import "dotenv/config";
 
 const app = express();
+
+// Railway sits in front of this app as a reverse proxy and adds an
+// X-Forwarded-For header with the real visitor's IP. Without this,
+// Express doesn't trust that header at all, and req.ip (which
+// express-rate-limit keys its per-IP limits on) falls back to Railway's
+// own proxy address — meaning every single visitor would appear to be
+// the SAME client, and rate limits meant to apply per-person would
+// actually apply to the site's entire combined traffic as one shared
+// bucket. "1" means trust exactly one hop upstream, matching Railway's
+// setup — not a wildcard trust of arbitrary forwarded headers.
+app.set("trust proxy", 1);
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICE_CENTS = parseInt(process.env.PRICE_CENTS, 10) || 499;
+
+// Lob/USPS charge noticeably more to mail internationally (roughly 2-3x
+// domestic postage) — this doesn't change PRICE_CENTS itself, it's added
+// on top specifically for non-US destinations. Defaults to 0 (no price
+// difference) until deliberately set — international mail is legitimately
+// riskier for the buyer too (weaker deliverability guarantees abroad), so
+// what to actually charge is a real business decision, not something to
+// guess at here.
+const INTERNATIONAL_SURCHARGE_CENTS = parseInt(process.env.INTERNATIONAL_SURCHARGE_CENTS, 10) || 0;
 
 // Railway injects RAILWAY_ENVIRONMENT into every deployment it runs,
 // staging and production both — it's never present on a local machine
@@ -340,6 +361,7 @@ app.get("/api/config", maybeLimit(priceLimiter), (req, res) => {
     charityUrl: CHARITY_URL,
     charityPerCard: CHARITY_PER_CARD,
     noteLimit: NOTE_LIMIT,
+    internationalSurchargeCents: INTERNATIONAL_SURCHARGE_CENTS,
     returnAddress: {
       name: process.env.RETURN_ADDRESS_NAME || "",
       line1: process.env.RETURN_ADDRESS_LINE1 || "",
@@ -430,10 +452,10 @@ async function isFlagged(note) {
 // 1. Front end calls this once the user has picked a joke and filled in
 //    the recipient address, BEFORE showing the card payment form.
 app.post("/api/create-payment-intent", maybeLimit(createIntentLimiter), async (req, res) => {
-  const { joke, note, recipient } = req.body;
+  const { joke, note, recipient, senderName } = req.body;
 
-  if (!joke || !recipient?.name || !recipient?.line1 || !recipient?.zip) {
-    return res.status(400).json({ error: "Missing joke or recipient details" });
+  if (!joke || !senderName || !recipient?.name || !recipient?.line1 || !recipient?.zip) {
+    return res.status(400).json({ error: "Missing joke, sender name, or recipient details" });
   }
 
   if (note && note.length > NOTE_LIMIT) {
@@ -459,6 +481,14 @@ app.post("/api/create-payment-intent", maybeLimit(createIntentLimiter), async (r
     }
   }
 
+  // Same length reasoning as the recipient name field above — this is a
+  // short name, not freeform content, so it gets a length cap like
+  // recipient.name rather than running through the note's moderation
+  // check.
+  if (senderName && senderName.length > RECIPIENT_FIELD_LIMIT) {
+    return res.status(400).json({ error: `That name is too long (${RECIPIENT_FIELD_LIMIT} character max).` });
+  }
+
   if (await isFlagged(note)) {
     return res.status(400).json({ error: "That note isn't allowed — please revise it." });
   }
@@ -470,18 +500,48 @@ app.post("/api/create-payment-intent", maybeLimit(createIntentLimiter), async (r
   // with nothing to stop them since no payment is required to reach this
   // point. A bad-but-plausible-looking address is now accepted and simply
   // charged for — see the Terms page for how that's handled.
-  let zip = (recipient.zip || "").trim();
-  if (/^\d{9}$/.test(zip)) zip = `${zip.slice(0, 5)}-${zip.slice(5)}`; // e.g. "208953402" -> "20895-3402"
-  if (!/^\d{5}(-\d{4})?$/.test(zip)) {
-    return res.status(400).json({ error: "That doesn't look like a valid 5- or 9-digit ZIP code." });
+  //
+  // Country defaults to "US" for backward compatibility with any in-flight
+  // requests from a frontend build that predates this field. Lob expects
+  // ISO 3166-1 alpha-2 codes (US, CA, GB, etc.) — this only checks the
+  // *shape* (two letters), not that it's a real, deliverable country; Lob's
+  // own API is the actual authority on that, same as it always was for US
+  // ZIP/state combinations that pass our checks but don't really exist.
+  const country = (recipient.country || "US").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) {
+    return res.status(400).json({ error: "That doesn't look like a valid country." });
   }
-  if (!US_STATE_CODES.has((recipient.state || "").trim().toUpperCase())) {
-    return res.status(400).json({ error: "That doesn't look like a valid state abbreviation." });
+
+  let zip = (recipient.zip || "").trim();
+  if (country === "US") {
+    // Same strict checks as before this ever supported other countries —
+    // untouched for the common case.
+    if (/^\d{9}$/.test(zip)) zip = `${zip.slice(0, 5)}-${zip.slice(5)}`; // e.g. "208953402" -> "20895-3402"
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+      return res.status(400).json({ error: "That doesn't look like a valid 5- or 9-digit ZIP code." });
+    }
+    if (!US_STATE_CODES.has((recipient.state || "").trim().toUpperCase())) {
+      return res.status(400).json({ error: "That doesn't look like a valid state abbreviation." });
+    }
+  } else {
+    // International postal codes vary hugely in format (letters, spaces,
+    // wildly different lengths — "SW1A 1AA", "K1A 0B1", "75001", etc.), so
+    // there's no single sensible regex the way there is for a US ZIP.
+    // Same for state/province — many countries don't have one at all, or
+    // don't abbreviate it the way US states do. Just require something
+    // present and not absurdly long, and let Lob's own address handling
+    // be the real check, same as it already is for the rest of the world.
+    if (!zip || zip.length > 12) {
+      return res.status(400).json({ error: "That doesn't look like a valid postal code." });
+    }
+    if (recipient.state && recipient.state.trim().length > RECIPIENT_FIELD_LIMIT) {
+      return res.status(400).json({ error: "That state/province is too long." });
+    }
   }
 
   try {
     const intent = await stripe.paymentIntents.create({
-      amount: PRICE_CENTS,
+      amount: PRICE_CENTS + (country === "US" ? 0 : INTERNATIONAL_SURCHARGE_CENTS),
       currency: "usd",
       payment_method_types: ["card"],
       // Stash everything the webhook will need to build the postcard.
@@ -490,18 +550,20 @@ app.post("/api/create-payment-intent", maybeLimit(createIntentLimiter), async (r
         environment: process.env.ENVIRONMENT_NAME || "unset",
         joke,
         note: note || "",
+        senderName: senderName || "",
         recipientName: recipient.name,
         recipientLine1: recipient.line1,
         recipientLine2: recipient.line2 || "",
         recipientCity: recipient.city,
-        recipientState: recipient.state,
+        recipientState: recipient.state || "",
         recipientZip: zip,
+        recipientCountry: country,
       },
     });
 
     res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    console.error(err);
+    console.error("Payment intent creation failed:", err.message);
     res.status(500).json({ error: "Could not start payment" });
   }
 });
@@ -533,7 +595,7 @@ function stripeBarHtml(position) {
 }
 
 const FONT_LINK =
-  '<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">';
+  '<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">';
 
 // 2. Called by the Stripe webhook above once payment has actually cleared.
 async function sendPostcard(meta) {
@@ -574,8 +636,10 @@ async function sendPostcard(meta) {
     <body style="margin:0;padding:0;width:6.25in;height:4.25in;position:relative;background:#F7F1E3;font-family:'Libre Baskerville',serif;">
       ${stripeBarHtml("top")}
       ${stripeBarHtml("bottom")}
-      <div style="position:absolute;top:0.55in;left:0.25in;width:2.3165in;font-family:'Libre Baskerville',serif;font-size:11pt;font-style:italic;line-height:1.5;color:#4A4636;overflow-wrap:break-word;">
-        ${escapeHtml(meta.note || "")}
+      <div style="position:absolute;top:0.55in;left:0.25in;width:2.3165in;font-family:'Libre Baskerville',serif;font-size:11pt;line-height:1.5;color:#4A4636;overflow-wrap:break-word;">
+        ${meta.note
+          ? `<span style="font-style:italic;">You can thank or blame <span style="font-weight:700">${escapeHtml(meta.senderName)}</span> for this card. They say:</span><span style="display:block;margin-top:1em;">${escapeHtml(meta.note)}</span>`
+          : `<span style="font-style:italic;"><span style="font-weight:700">${escapeHtml(meta.senderName)}</span> sent this. They regret nothing.</span>`}
       </div>
       <div style="position:absolute;top:0.55in;left:2.6in;right:0.4in;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:7.5pt;font-weight:500;line-height:1.4;letter-spacing:0.02em;color:#BC4430;">
         Somebody paid to send you this groaner. You can return the favor at <span style="font-weight:700">dadjokepostcards.com</span>
@@ -600,9 +664,9 @@ async function sendPostcard(meta) {
         address_line1: meta.recipientLine1,
         address_line2: meta.recipientLine2 || undefined,
         address_city: meta.recipientCity,
-        address_state: meta.recipientState,
+        address_state: meta.recipientState || undefined,
         address_zip: meta.recipientZip,
-        address_country: "US",
+        address_country: meta.recipientCountry || "US",
       },
       from: {
         name: process.env.RETURN_ADDRESS_NAME,

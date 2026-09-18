@@ -30,7 +30,7 @@ function trackStep(step, attempt = 0) {
 }
 
 const FONT_IMPORT = `
-@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
 `;
 
 const DEFAULT_PRICE_CENTS = 499; // fallback shown only until /api/price responds
@@ -277,10 +277,11 @@ function PostcardFront({ joke, loading, stamped, size = "normal" }) {
   );
 }
 
-function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityPerCard, returnAddress }) {
+function PostcardBack({ joke, recipient, note, senderName, charityName, charityUrl, charityPerCard, returnAddress }) {
   const contentRef = useRef(null);
   const fitScale = useFitScale(contentRef, [
     note,
+    senderName,
     recipient.name,
     recipient.line1,
     recipient.line2,
@@ -305,9 +306,9 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
       <div ref={contentRef} className="h-full min-h-0 p-2 pb-0 relative">
         <div className="h-full flex gap-3">
           <div style={{ flexBasis: "40%" }} className="min-w-0">
-            {note && (
+            {senderName && (
               <p
-                className="italic leading-snug"
+                className="leading-snug"
                 style={{
                   fontFamily: "'Libre Baskerville', serif",
                   color: "#4A4636",
@@ -315,7 +316,18 @@ function PostcardBack({ joke, recipient, note, charityName, charityUrl, charityP
                   overflowWrap: "break-word",
                 }}
               >
-                {note}
+                {note ? (
+                  <>
+                    <span style={{ fontStyle: "italic" }}>
+                      You can thank or blame <span style={{ fontWeight: 700 }}>{senderName}</span> for this card. They say:
+                    </span>
+                    <span style={{ display: "block", marginTop: "1em" }}>{note}</span>
+                  </>
+                ) : (
+                  <span style={{ fontStyle: "italic" }}>
+                    <span style={{ fontWeight: 700 }}>{senderName}</span> sent this. They regret nothing.
+                  </span>
+                )}
               </p>
             )}
           </div>
@@ -474,9 +486,10 @@ function PostcardApp() {
   // ahead does it fetch a new one and append it.
   const [jokeNav, setJokeNav] = useState({ history: [], index: -1 });
 
-  const [recipient, setRecipient] = useState({ name: "", line1: "", line2: "", city: "", state: "", zip: "" });
+  const [recipient, setRecipient] = useState({ name: "", line1: "", line2: "", city: "", state: "", zip: "", country: "US" });
   const [billingName, setBillingName] = useState("");
   const [note, setNote] = useState("");
+  const [senderName, setSenderName] = useState("");
 
   const [clientSecret, setClientSecret] = useState("");
   const [creatingIntent, setCreatingIntent] = useState(false);
@@ -534,6 +547,7 @@ function PostcardApp() {
     charityUrl: DEFAULT_CHARITY_URL,
     charityPerCard: DEFAULT_CHARITY_PER_CARD,
     returnAddress: DEFAULT_RETURN_ADDRESS,
+    internationalSurchargeCents: 0,
   });
 
   useEffect(() => {
@@ -547,12 +561,23 @@ function PostcardApp() {
           charityUrl: data.charityUrl || prev.charityUrl,
           charityPerCard: data.charityPerCard || prev.charityPerCard,
           returnAddress: data.returnAddress || prev.returnAddress,
+          internationalSurchargeCents:
+            typeof data.internationalSurchargeCents === "number"
+              ? data.internationalSurchargeCents
+              : prev.internationalSurchargeCents,
         }));
       })
       .catch(() => {
         // Keep the defaults above — same reasoning as the price fetch.
       });
   }, []);
+
+  // Only actually differs from priceCents once a non-US country has been
+  // selected AND an international surcharge is configured (defaults to 0).
+  // The header tagline intentionally still shows plain priceCents, since
+  // it's displayed before any recipient/country has been chosen.
+  const effectivePriceCents =
+    priceCents + (recipient.country && recipient.country !== "US" ? config.internationalSurchargeCents : 0);
 
   const fetchJoke = useCallback(async () => {
     setJokeLoading(true);
@@ -631,7 +656,7 @@ function PostcardApp() {
   };
 
   const recipientComplete =
-    recipient.name && recipient.line1 && recipient.city && recipient.state && recipient.zip;
+    senderName && recipient.name && recipient.line1 && recipient.city && recipient.state && recipient.zip;
 
   // Called when the user clicks "Proceed to payment" on the review step.
   // Asks the backend to verify the address and start a Stripe PaymentIntent
@@ -648,7 +673,7 @@ function PostcardApp() {
       const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ joke, note, recipient }),
+        body: JSON.stringify({ joke, note, recipient, senderName }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start payment");
@@ -688,9 +713,10 @@ function PostcardApp() {
   const resetAll = () => {
     setStep("browse");
     setJokeNav({ history: [], index: -1 });
-    setRecipient({ name: "", line1: "", line2: "", city: "", state: "", zip: "" });
+    setRecipient({ name: "", line1: "", line2: "", city: "", state: "", zip: "", country: "US" });
     setBillingName("");
     setNote("");
+    setSenderName("");
     setClientSecret("");
     setPaymentError("");
     setOrderId("");
@@ -723,6 +749,7 @@ function PostcardApp() {
           </h1>
           <p className="mt-2 text-sm italic" style={{ color: "#605A4F" }}>
             One groan-worthy joke, mailed to someone who deserves it: {formatPrice(priceCents)}
+            {config.internationalSurchargeCents > 0 && ` (+${formatPrice(config.internationalSurchargeCents)} for non-US addresses)`}
           </p>
           <p
             className="mt-2 text-[11px] tracking-wide"
@@ -866,23 +893,80 @@ function PostcardApp() {
                   value={recipient.city}
                   onChange={(e) => setRecipient({ ...recipient, city: e.target.value })}
                 />
-                <label htmlFor="recipient-state" className="sr-only">State</label>
+                <label htmlFor="recipient-country" className="sr-only">Country</label>
+                <select
+                  id="recipient-country"
+                  className="col-span-2 px-3 py-2 text-sm rounded-sm"
+                  style={inputStyle}
+                  value={recipient.country}
+                  onChange={(e) => setRecipient({ ...recipient, country: e.target.value })}
+                >
+                  {/* Lob supports 240+ countries — this is a curated subset of
+                      the most commonly mailed-to ones, not an exhaustive list.
+                      Extending it is just adding another <option>. */}
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="AU">Australia</option>
+                  <option value="NZ">New Zealand</option>
+                  <option value="IE">Ireland</option>
+                  <option value="DE">Germany</option>
+                  <option value="FR">France</option>
+                  <option value="ES">Spain</option>
+                  <option value="IT">Italy</option>
+                  <option value="NL">Netherlands</option>
+                  <option value="BE">Belgium</option>
+                  <option value="CH">Switzerland</option>
+                  <option value="AT">Austria</option>
+                  <option value="SE">Sweden</option>
+                  <option value="NO">Norway</option>
+                  <option value="DK">Denmark</option>
+                  <option value="FI">Finland</option>
+                  <option value="PT">Portugal</option>
+                  <option value="PL">Poland</option>
+                  <option value="CZ">Czech Republic</option>
+                  <option value="HU">Hungary</option>
+                  <option value="RO">Romania</option>
+                  <option value="GR">Greece</option>
+                  <option value="JP">Japan</option>
+                  <option value="KR">South Korea</option>
+                  <option value="CN">China</option>
+                  <option value="IN">India</option>
+                  <option value="SG">Singapore</option>
+                  <option value="HK">Hong Kong</option>
+                  <option value="PH">Philippines</option>
+                  <option value="TH">Thailand</option>
+                  <option value="VN">Vietnam</option>
+                  <option value="MY">Malaysia</option>
+                  <option value="ID">Indonesia</option>
+                  <option value="MX">Mexico</option>
+                  <option value="BR">Brazil</option>
+                  <option value="AR">Argentina</option>
+                  <option value="ZA">South Africa</option>
+                  <option value="IL">Israel</option>
+                  <option value="AE">United Arab Emirates</option>
+                </select>
+                <label htmlFor="recipient-state" className="sr-only">
+                  {recipient.country === "US" ? "State" : "State / Province (optional)"}
+                </label>
                 <input
                   id="recipient-state"
                   className="px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
-                  placeholder="State"
-                  maxLength={2}
+                  placeholder={recipient.country === "US" ? "State" : "State / Province (optional)"}
+                  maxLength={recipient.country === "US" ? 2 : 40}
                   value={recipient.state}
                   onChange={(e) => setRecipient({ ...recipient, state: e.target.value })}
                 />
-                <label htmlFor="recipient-zip" className="sr-only">ZIP code</label>
+                <label htmlFor="recipient-zip" className="sr-only">
+                  {recipient.country === "US" ? "ZIP code" : "Postal code"}
+                </label>
                 <input
                   id="recipient-zip"
                   className="col-span-2 px-3 py-2 text-sm rounded-sm"
                   style={inputStyle}
-                  placeholder="ZIP code"
-                  maxLength={10}
+                  placeholder={recipient.country === "US" ? "ZIP code" : "Postal code"}
+                  maxLength={recipient.country === "US" ? 10 : 12}
                   value={recipient.zip}
                   onChange={(e) => setRecipient({ ...recipient, zip: e.target.value })}
                 />
@@ -892,7 +976,24 @@ function PostcardApp() {
                 className="text-sm uppercase tracking-wide mt-5 mb-2"
                 style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
               >
-                Add a note (optional — don't forget to sign it!)
+                From
+              </h2>
+              <label htmlFor="sender-name" className="sr-only">Your name</label>
+              <input
+                id="sender-name"
+                className="w-full px-3 py-2 text-sm rounded-sm"
+                style={inputStyle}
+                placeholder="Your name"
+                maxLength={40}
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
+              />
+
+              <h2
+                className="text-sm uppercase tracking-wide mt-5 mb-2"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#605A4F" }}
+              >
+                Add a note (optional)
               </h2>
               <label htmlFor="postcard-note" className="sr-only">Note to include on the postcard</label>
               <textarea
@@ -981,6 +1082,7 @@ function PostcardApp() {
                     joke={joke}
                     recipient={recipient}
                     note={note}
+                    senderName={senderName}
                     charityName={config.charityName}
                     charityUrl={config.charityUrl}
                     charityPerCard={config.charityPerCard}
@@ -991,18 +1093,25 @@ function PostcardApp() {
             </div>
 
             <div
-              className="mt-8 mx-auto max-w-xs p-4 rounded-sm flex justify-between items-center"
+              className="mt-8 mx-auto max-w-xs p-4 rounded-sm"
               style={{ backgroundColor: "#F7F1E3", border: "1px solid #D8CFB8" }}
             >
-              <span className="text-sm" style={{ color: "#4A4636" }}>
-                Printed postcard + postage
-              </span>
-              <span
-                className="text-sm font-medium"
-                style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
-              >
-                {formatPrice(priceCents)}
-              </span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm" style={{ color: "#4A4636" }}>
+                  Printed postcard + postage
+                </span>
+                <span
+                  className="text-sm font-medium"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
+                >
+                  {formatPrice(effectivePriceCents)}
+                </span>
+              </div>
+              {recipient.country && recipient.country !== "US" && config.internationalSurchargeCents > 0 && (
+                <p className="text-xs mt-2" style={{ color: "#656055" }}>
+                  Includes a {formatPrice(config.internationalSurchargeCents)} international postage surcharge.
+                </p>
+              )}
             </div>
 
             <div className="flex justify-between mt-6 max-w-xs mx-auto">
@@ -1094,7 +1203,7 @@ function PostcardApp() {
                   className="text-base font-medium"
                   style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#24344A" }}
                 >
-                  {formatPrice(priceCents)}
+                  {formatPrice(effectivePriceCents)}
                 </span>
               </div>
 
