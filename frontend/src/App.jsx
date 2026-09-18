@@ -51,6 +51,55 @@ const DEFAULT_CHARITY_URL = "https://jazzfoundation.org";
 const DEFAULT_CHARITY_PER_CARD = "$2";
 const DEFAULT_RETURN_ADDRESS = { name: "Pun & Post", line1: "", city: "Smallville", state: "KS", zip: "66002" };
 
+// Single source of truth for the recipient country dropdown — also used
+// to display the country name in the address preview, so the two can't
+// drift out of sync. Lob supports 240+ countries; this is a curated
+// subset of the most commonly mailed-to ones, not exhaustive. Extending
+// it is just adding another entry, which updates both places at once.
+const COUNTRY_NAMES = {
+  US: "United States",
+  CA: "Canada",
+  GB: "United Kingdom",
+  AU: "Australia",
+  NZ: "New Zealand",
+  IE: "Ireland",
+  DE: "Germany",
+  FR: "France",
+  ES: "Spain",
+  IT: "Italy",
+  NL: "Netherlands",
+  BE: "Belgium",
+  CH: "Switzerland",
+  AT: "Austria",
+  SE: "Sweden",
+  NO: "Norway",
+  DK: "Denmark",
+  FI: "Finland",
+  PT: "Portugal",
+  PL: "Poland",
+  CZ: "Czech Republic",
+  HU: "Hungary",
+  RO: "Romania",
+  GR: "Greece",
+  JP: "Japan",
+  KR: "South Korea",
+  CN: "China",
+  IN: "India",
+  SG: "Singapore",
+  HK: "Hong Kong",
+  PH: "Philippines",
+  TH: "Thailand",
+  VN: "Vietnam",
+  MY: "Malaysia",
+  ID: "Indonesia",
+  MX: "Mexico",
+  BR: "Brazil",
+  AR: "Argentina",
+  ZA: "South Africa",
+  IL: "Israel",
+  AE: "United Arab Emirates",
+};
+
 // Set VITE_API_BASE in your .env file (or your hosting provider's env vars)
 // to your deployed backend's URL, e.g. "https://your-app.onrender.com".
 // Until that's set, the app falls back to a public demo proxy so there's
@@ -431,6 +480,9 @@ function PostcardBack({ joke, recipient, note, senderName, charityName, charityU
             <div>
               {(recipient.city || "City") + ", " + (recipient.state || "ST") + " " + (formatZip(recipient.zip) || "00000")}
             </div>
+            {recipient.country && recipient.country !== "US" && (
+              <div>{(COUNTRY_NAMES[recipient.country] || recipient.country).toUpperCase()}</div>
+            )}
           </div>
         </div>
       </div>
@@ -970,50 +1022,9 @@ function PostcardApp() {
                   value={recipient.country}
                   onChange={(e) => setRecipient({ ...recipient, country: e.target.value })}
                 >
-                  {/* Lob supports 240+ countries — this is a curated subset of
-                      the most commonly mailed-to ones, not an exhaustive list.
-                      Extending it is just adding another <option>. */}
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="AU">Australia</option>
-                  <option value="NZ">New Zealand</option>
-                  <option value="IE">Ireland</option>
-                  <option value="DE">Germany</option>
-                  <option value="FR">France</option>
-                  <option value="ES">Spain</option>
-                  <option value="IT">Italy</option>
-                  <option value="NL">Netherlands</option>
-                  <option value="BE">Belgium</option>
-                  <option value="CH">Switzerland</option>
-                  <option value="AT">Austria</option>
-                  <option value="SE">Sweden</option>
-                  <option value="NO">Norway</option>
-                  <option value="DK">Denmark</option>
-                  <option value="FI">Finland</option>
-                  <option value="PT">Portugal</option>
-                  <option value="PL">Poland</option>
-                  <option value="CZ">Czech Republic</option>
-                  <option value="HU">Hungary</option>
-                  <option value="RO">Romania</option>
-                  <option value="GR">Greece</option>
-                  <option value="JP">Japan</option>
-                  <option value="KR">South Korea</option>
-                  <option value="CN">China</option>
-                  <option value="IN">India</option>
-                  <option value="SG">Singapore</option>
-                  <option value="HK">Hong Kong</option>
-                  <option value="PH">Philippines</option>
-                  <option value="TH">Thailand</option>
-                  <option value="VN">Vietnam</option>
-                  <option value="MY">Malaysia</option>
-                  <option value="ID">Indonesia</option>
-                  <option value="MX">Mexico</option>
-                  <option value="BR">Brazil</option>
-                  <option value="AR">Argentina</option>
-                  <option value="ZA">South Africa</option>
-                  <option value="IL">Israel</option>
-                  <option value="AE">United Arab Emirates</option>
+                  {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
+                    <option key={code} value={code}>{name}</option>
+                  ))}
                 </select>
                 <label htmlFor="recipient-state" className="sr-only">
                   {recipient.country === "US" ? "State" : "State / Province (optional)"}
