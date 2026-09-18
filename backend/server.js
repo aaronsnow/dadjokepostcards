@@ -274,7 +274,13 @@ app.get("/api/joke", maybeLimit(jokeLimiter), async (req, res) => {
   // test the print-overflow fix (jokeFontSizePt, near sendPostcard below)
   // by just clicking "Next joke" a couple of times, rather than clicking
   // repeatedly and hoping the random API happens to return something long.
-  if (isLocalDev && req.query.long === "1") {
+  //
+  // Deliberately skipped whenever a real ?term= search is also present —
+  // without this, long=1 had an unconditional early return, so someone
+  // testing the keyword search locally with VITE_TEST_LONG_JOKES also set
+  // would always get the longest joke in a random batch, completely
+  // ignoring their search term, with no indication anything was wrong.
+  if (isLocalDev && req.query.long === "1" && !req.query.term) {
     try {
       // /search defaults to page 1 when no page is given — always the
       // exact same 30 jokes back, hence always the exact same "longest of
@@ -320,6 +326,104 @@ app.get("/api/joke", maybeLimit(jokeLimiter), async (req, res) => {
     } catch (err) {
       console.error("Long-joke test fetch failed:", err.message);
       return res.status(502).json({ error: "Could not fetch a long test joke right now" });
+    }
+  }
+
+  // Real user-facing feature (unlike ?long=1 above, available in every
+  // environment, not gated to local dev): ?term=X searches for jokes
+  // containing that word via icanhazdadjoke's /search endpoint, instead
+  // of one random joke. Same random-page technique as the long-joke
+  // helper above, so repeated requests with the same term don't always
+  // return the exact same first match.
+  if (req.query.term) {
+    const term = req.query.term.trim().slice(0, 40); // sanity cap — this is a search query against a third party, never stored or printed
+    if (term) {
+      try {
+        const firstPageRes = await fetch(`https://icanhazdadjoke.com/search?limit=30&term=${encodeURIComponent(term)}`, {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Pun & Post (https://example.com)",
+          },
+        });
+        if (!firstPageRes.ok) throw new Error(`upstream ${firstPageRes.status}`);
+        const firstPageData = await firstPageRes.json();
+
+        let results = firstPageData.results || [];
+        const totalPages = firstPageData.total_pages || 1;
+        if (totalPages > 1) {
+          const randomPage = 1 + Math.floor(Math.random() * totalPages);
+          const randomPageRes = await fetch(`https://icanhazdadjoke.com/search?limit=30&term=${encodeURIComponent(term)}&page=${randomPage}`, {
+            headers: {
+              Accept: "application/json",
+              "User-Agent": "Pun & Post (https://example.com)",
+            },
+          });
+          if (randomPageRes.ok) {
+            const randomPageData = await randomPageRes.json();
+            if (randomPageData.results?.length) results = randomPageData.results;
+          }
+          // Same graceful degradation as the long-joke helper: if this
+          // second request fails, results still holds page 1's matches.
+        }
+
+        if (!results.length) {
+          return res.status(404).json({ error: `No jokes found containing "${term}".` });
+        }
+        const randomJoke = results[Math.floor(Math.random() * results.length)];
+        return res.json({ joke: randomJoke.joke });
+      } catch (err) {
+        console.error("Joke search failed:", err.message);
+        return res.status(502).json({ error: "Could not search jokes right now" });
+      }
+    }
+  }
+
+  // Real user-facing feature (unlike ?long=1 above, available in every
+  // environment, not gated to local dev): ?term=X searches for jokes
+  // containing that word via icanhazdadjoke's /search endpoint, instead
+  // of one random joke. Same random-page technique as the long-joke
+  // helper above, so repeated requests with the same term don't always
+  // return the exact same first match.
+  if (req.query.term) {
+    const term = req.query.term.trim().slice(0, 40); // sanity cap — this is a search query against a third party, never stored or printed
+    if (term) {
+      try {
+        const firstPageRes = await fetch(`https://icanhazdadjoke.com/search?limit=30&term=${encodeURIComponent(term)}`, {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Pun & Post (https://example.com)",
+          },
+        });
+        if (!firstPageRes.ok) throw new Error(`upstream ${firstPageRes.status}`);
+        const firstPageData = await firstPageRes.json();
+
+        let results = firstPageData.results || [];
+        const totalPages = firstPageData.total_pages || 1;
+        if (totalPages > 1) {
+          const randomPage = 1 + Math.floor(Math.random() * totalPages);
+          const randomPageRes = await fetch(`https://icanhazdadjoke.com/search?limit=30&term=${encodeURIComponent(term)}&page=${randomPage}`, {
+            headers: {
+              Accept: "application/json",
+              "User-Agent": "Pun & Post (https://example.com)",
+            },
+          });
+          if (randomPageRes.ok) {
+            const randomPageData = await randomPageRes.json();
+            if (randomPageData.results?.length) results = randomPageData.results;
+          }
+          // Same graceful degradation as the long-joke helper: if this
+          // second request fails, results still holds page 1's matches.
+        }
+
+        if (!results.length) {
+          return res.status(404).json({ error: `No jokes found containing "${term}".` });
+        }
+        const randomJoke = results[Math.floor(Math.random() * results.length)];
+        return res.json({ joke: randomJoke.joke });
+      } catch (err) {
+        console.error("Joke search failed:", err.message);
+        return res.status(502).json({ error: "Could not search jokes right now" });
+      }
     }
   }
 

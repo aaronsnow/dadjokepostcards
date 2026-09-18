@@ -438,9 +438,14 @@ function PostcardBack({ joke, recipient, note, senderName, charityName, charityU
   );
 }
 
-function StepLabel({ n, active, done, children }) {
+function StepLabel({ n, active, done, children, onClick }) {
   return (
-    <div className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
+    <div
+      className="flex items-center gap-2"
+      aria-current={active ? "step" : undefined}
+      onClick={onClick}
+      style={onClick ? { cursor: "pointer" } : undefined}
+    >
       <div
         aria-hidden="true"
         className="w-6 h-6 rounded-full flex items-center justify-center text-[11px]"
@@ -479,6 +484,12 @@ function PostcardApp() {
   const [joke, setJoke] = useState("");
   const [jokeLoading, setJokeLoading] = useState(false);
   const [jokeError, setJokeError] = useState(false);
+  // Hidden feature: clicking the "Pick a joke" step label toggles a
+  // keyword filter for joke fetching. Deliberately not surfaced anywhere
+  // else — no button, no hint text, matching how it was asked for.
+  const [keywordFilterOpen, setKeywordFilterOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
+  const [searchNoResults, setSearchNoResults] = useState("");
   const [stamped, setStamped] = useState(false);
   // Linear history of jokes shown this session, plus a pointer into it.
   // "Previous joke" moves the pointer back (no fetch). "Next joke" moves
@@ -582,6 +593,7 @@ function PostcardApp() {
   const fetchJoke = useCallback(async () => {
     setJokeLoading(true);
     setJokeError(false);
+    setSearchNoResults("");
     setStamped(false);
     // Try your own backend first (this is the real production path — see
     // /api/joke in server.js). Only fall back to the public demo proxy if
@@ -600,9 +612,27 @@ function PostcardApp() {
         // (the backend independently refuses to honor this outside local
         // dev regardless, via isLocalDev in server.js, but there's no
         // reason to rely on that as the only safeguard).
-        const longParam = import.meta.env.VITE_TEST_LONG_JOKES ? "?long=1" : "";
-        const res = await fetch(`${API_BASE}/api/joke${longParam}`);
-        if (!res.ok) throw new Error("backend error");
+        const params = new URLSearchParams();
+        const searching = keywordFilterOpen && keyword.trim();
+        // A real, active keyword search takes priority over the long-joke
+        // test flag — they're for different purposes, and testing one
+        // shouldn't silently interfere with the other. (The backend also
+        // guards against this independently — see the reordering in
+        // /api/joke — so this isn't the only thing preventing it.)
+        if (import.meta.env.VITE_TEST_LONG_JOKES && !searching) params.set("long", "1");
+        if (searching) params.set("term", keyword.trim());
+        const queryString = params.toString();
+        const res = await fetch(`${API_BASE}/api/joke${queryString ? `?${queryString}` : ""}`);
+        if (!res.ok) {
+          // A search with no matches isn't a real error — don't overwrite
+          // whatever joke is currently on screen with an unrelated
+          // fallback; just report it and let the current joke stand.
+          if (res.status === 404 && params.has("term")) {
+            setSearchNoResults(keyword.trim());
+            return;
+          }
+          throw new Error("backend error");
+        }
         const data = await res.json();
         recordJoke(data.joke);
         return;
@@ -618,7 +648,7 @@ function PostcardApp() {
     } finally {
       setJokeLoading(false);
     }
-  }, []);
+  }, [keywordFilterOpen, keyword]);
 
   // StrictMode intentionally double-invokes effects on mount in development
   // to surface exactly this kind of bug: without this guard, the initial
@@ -639,9 +669,13 @@ function PostcardApp() {
   };
 
   const nextJoke = () => {
-    if (jokeNav.index < jokeNav.history.length - 1) {
+    const searching = keywordFilterOpen && keyword.trim();
+    if (!searching && jokeNav.index < jokeNav.history.length - 1) {
       // Already have a joke ahead of us (we stepped back at some point) —
-      // move forward to it instead of fetching and overwriting it.
+      // move forward to it instead of fetching and overwriting it. Only
+      // valid when there's no active keyword search — with one, an old
+      // history entry from before the search started could easily not
+      // match the current keyword at all, so it's always a fresh fetch.
       setStamped(false);
       setJoke(jokeNav.history[jokeNav.index + 1]);
       setJokeNav((nav) => ({ ...nav, index: nav.index + 1 }));
@@ -768,7 +802,16 @@ function PostcardApp() {
         </header>
 
         <div className="flex items-center justify-center gap-5 mb-8 flex-wrap">
-          <StepLabel n={1} active={step === "browse"} done={["compose", "review", "payment", "done"].includes(step)}>
+          <StepLabel
+            n={1}
+            active={step === "browse"}
+            done={["compose", "review", "payment", "done"].includes(step)}
+            onClick={() => {
+              setKeywordFilterOpen((open) => !open);
+              setKeyword("");
+              setSearchNoResults("");
+            }}
+          >
             Pick a joke
           </StepLabel>
           <div className="w-6 h-px" style={{ backgroundColor: "#C9C0A9" }} />
@@ -787,7 +830,33 @@ function PostcardApp() {
 
         {step === "browse" && (
           <div>
+            {keywordFilterOpen && (
+              <div className="max-w-xs mx-auto mb-4">
+                <label htmlFor="joke-keyword" className="sr-only">Filter jokes by keyword</label>
+                <input
+                  id="joke-keyword"
+                  autoFocus
+                  className="w-full px-3 py-2 text-sm rounded-sm"
+                  style={inputStyle}
+                  placeholder="Filter by keyword…"
+                  maxLength={40}
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      nextJoke();
+                    }
+                  }}
+                />
+              </div>
+            )}
             <PostcardFront joke={joke} loading={jokeLoading} stamped={stamped} size="large" />
+            {searchNoResults && (
+              <p className="text-xs text-center mt-3" style={{ color: "#9F3928" }}>
+                No jokes found containing "{searchNoResults}" — try a different word.
+              </p>
+            )}
             {jokeError && (
               <p className="text-xs text-center mt-3" style={{ color: "#9F3928" }}>
                 Couldn't reach the joke service — showing a backup joke instead.
